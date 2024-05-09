@@ -38,7 +38,7 @@ class ADMM(BaseEstimator, ABC):
         Called after data is available.
         """
         raise NotImplementedError(
-            f"Setup method on {self.__class__.__name__} not implemented"
+            f"_setup method on {self.__class__.__name__} not implemented"
         )
 
     def fit(self, X, y=None, **kwargs):
