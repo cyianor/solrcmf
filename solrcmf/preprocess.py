@@ -48,7 +48,7 @@ def _residual(
 
 
 def bicenter(X: NDArray[float64], tol: float = 1e-16, max_iter: int = 10):
-    """Bicenter the input matrix.
+    """Bicenter the input matrix allowing for missing values.
 
     Computes a total mean as well as row and column means.
 
@@ -57,6 +57,21 @@ def bicenter(X: NDArray[float64], tol: float = 1e-16, max_iter: int = 10):
     Hastie et al. (2015) Matrix completion and low-rank SVD via fast
     alternating least squares. Journal of Machine Learning Research,
     16(104):3367--3402, 2015.
+
+    Parameters
+    ----------
+    X : ndarray
+        The input matrix
+    tol : float
+        Convergence tolerance
+    max_iter : int
+        Maximum number of iterations to perform.
+
+    Returns
+    -------
+    (Y, m, rm, cm) : (ndarray, float, ndarray, ndarray)
+        Returns the bi-centered matrix, the overall mean, as well as
+        row-means and column-means.
     """
     X = check_array(X, force_all_finite="allow-nan")
     assert tol > 0, "'tol' needs to be positive"

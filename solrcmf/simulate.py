@@ -1,5 +1,5 @@
-from numpy.typing import NDArray
-from numpy import float64, diag, sum, sqrt, argsort, floor
+from numpy.typing import ArrayLike
+from numpy import diag, sum, sqrt, argsort, floor, atleast_1d
 from numpy.linalg import qr
 from numpy.random import Generator, default_rng
 from collections.abc import Hashable
@@ -40,10 +40,7 @@ def _sparse_v(
 def simulate(
     *,
     viewdims: dict[Hashable, int],
-    factor_scales: dict[
-        ViewDesc,
-        NDArray[float64],
-    ],
+    factor_scales: dict[ViewDesc, ArrayLike],
     scales: dict[ViewDesc, float] | None = None,
     snr: dict[ViewDesc, float] | float = 1.0,
     factor_sparsity: dict[Hashable, float] | None = None,
@@ -52,6 +49,9 @@ def simulate(
     if rng is None:
         rng = default_rng()
 
+    factor_scales = {
+        k: atleast_1d(v) for k, v in factor_scales.items()
+    }
     shapes = [s.shape for s in factor_scales.values()]
     assert all(
         [len(s) == 1 and s == shapes[0] for s in shapes]
