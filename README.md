@@ -162,7 +162,7 @@ The final solution is found by determining the pair of hyperparameters that lead
 # parameter combinations to be tested. Lists need to be of the same length
 # or one needs to be a scalar.
 # - `cv` number of folds as an integer or an object of
-#   class `lscmf.ElementwiseFolds`. The latter is also used internally if only
+#   class `solrcmf.ElementwiseFolds`. The latter is also used internally if only
 #   an integer is provided, however, it allows specification of a random
 #   number generator and whether or not inputs should be shuffled
 #   before splitting.
@@ -205,7 +205,7 @@ cv_res.loc[est_cv.best_index_, :]
     max_rank                                 10.000000
     factor_penalty                            0.058822
     objective_value_penalized                 2.014111
-    mean_elapsed_process_time_penalized       7.679406
+    mean_elapsed_process_time_penalized       7.571215
     std_elapsed_process_time_penalized        0.000000
     est_max_rank                              5.000000
     structural_zeros                         30.000000
@@ -220,8 +220,8 @@ cv_res.loc[est_cv.best_index_, :]
     neg_mean_squared_error_fold7             -0.000185
     neg_mean_squared_error_fold8             -0.000191
     neg_mean_squared_error_fold9             -0.000181
-    mean_elapsed_process_time_fixed           1.367407
-    std_elapsed_process_time_fixed            0.169312
+    mean_elapsed_process_time_fixed           1.297466
+    std_elapsed_process_time_fixed            0.131769
     mean_neg_mean_squared_error              -0.000187
     std_neg_mean_squared_error                0.000008
     Name: 76, dtype: float64

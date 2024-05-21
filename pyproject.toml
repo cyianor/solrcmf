@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "solrcmf"
-version = "0.1.0"
+version = "0.1.1"
 description = "Implements an ADMM algorithm to solve the solrCMF problem."
 authors = ["Felix Held <felix.held@gmail.com>"]
 license = "MIT"
