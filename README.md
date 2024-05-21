@@ -44,7 +44,7 @@ rng = default_rng(42)
 xs_sim = solrcmf.simulate(
     viewdims={0: 100, 1: 50, 2: 50},
     factor_scales={
-        (0, 1): [7.0, 4.5, 3.9, 0.0, 0.0],
+        (0, 1): [7.0, 5.1, 4.6, 0.0, 0.0],
         (0, 2): [8.3, 0.0, 0.0, 5.5, 0.0],
         (1, 2, 0): [6.3, 0.0, 4.7, 0.0, 5.1],
         (1, 2, 1): [0.0, 8.6, 4.9, 0.0, 0.0],
@@ -120,16 +120,8 @@ final values of the initial runs as starting values. Penalty parameters are not 
 
 
 ```python
-est.fit(xs_scaled, vs=est_init.vs_, ds=est_init.ds_, us=est_init.vs_)
+est.fit(xs_scaled, vs=est_init.vs_, ds=est_init.ds_, us=est_init.vs_);
 ```
-
-
-
-
-    SolrCMF(factor_penalty=0.08, factor_pruning=False, init='custom',
-            max_iter=100000, max_rank=10, mu=10, structure_penalty=0.05)
-
-
 
 Estimates for $D_{ij}$ are then in `est.ds_` and estimates for $V_i$ in `est.vs_`.
 
@@ -145,10 +137,10 @@ for k, d in est.ds_.items():
     )
 ```
 
-    (0, 1)    : [ 0.00  6.55 -1.44  3.52  0.00 -0.00 -0.00 -0.00  0.00 -0.00]
-    (0, 2)    : [ 0.00 -7.52 -0.00 -0.00 -2.88 -0.00  0.00 -0.00  0.00  0.00]
-    (1, 2, 0) : [ 0.00 -5.67  2.92  0.00 -0.00 -0.00 -2.81 -0.00 -0.00  0.00]
-    (1, 2, 1) : [-0.00  0.00  3.64 -8.23  0.00 -0.00  0.00  0.00  0.00  0.00]
+    (0, 1)    : [-0.00  2.34 -0.00 -0.00 -4.17  0.00  0.00  0.00  0.00  6.52]
+    (0, 2)    : [ 0.00 -0.00  3.44  0.00  0.00 -0.00 -0.00  0.00 -0.00 -7.53]
+    (1, 2, 0) : [ 0.00 -3.21 -0.00  0.00  0.00  0.00  0.00 -0.00 -2.88 -5.67]
+    (1, 2, 1) : [ 0.00 -3.74  0.05 -0.00 -8.22 -0.00  0.00 -0.00  0.00  0.00]
 
 
 Shrinkage can be clearly seen in the singular value estimates compared to the groundtruth.
@@ -169,13 +161,17 @@ The final solution is found by determining the pair of hyperparameters that lead
 # Lists of structure and factor penalties are supplied containing the
 # parameter combinations to be tested. Lists need to be of the same length
 # or one needs to be a scalar.
-# - `cv` number of folds
+# - `cv` number of folds as an integer or an object of
+#   class `lscmf.ElementwiseFolds`. The latter is also used internally if only
+#   an integer is provided, however, it allows specification of a random
+#   number generator and whether or not inputs should be shuffled
+#   before splitting.
 est_cv = solrcmf.SolrCMFCV(
     max_rank=10,
     structure_penalty=np.exp(rng.uniform(np.log(5e-2), np.log(1.0), 100)),
     factor_penalty=np.exp(rng.uniform(np.log(5e-2), np.log(1.0), 100)),
     mu=10,
-    cv=10,
+    cv=solrcmf.ElementwiseFolds(10, rng=rng),
     init="custom",
     max_iter=100000,
     n_jobs=4,
@@ -189,27 +185,8 @@ Perform hyperparameter selection. This step can be time-intensive.
 # Initial values are supplied as lists. If length 1 then they are reused.
 # If same length as hyperparameters then different initial values can be used
 # for each pair of hyperparameters.
-est_cv.fit(xs_scaled, vs=[est_init.vs_], ds=[est_init.ds_], us=[est_init.vs_])
+est_cv.fit(xs_scaled, vs=[est_init.vs_], ds=[est_init.ds_], us=[est_init.vs_]);
 ```
-
-
-
-
-    SolrCMFCV(factor_penalty=array([0.36792423, 0.06941587, 0.10752516, 0.43376266, 0.53883355,
-           0.95854522, 0.10676321, 0.62188201, 0.08373001, 0.07400256,
-           0.44430964, 0.19013555, 0.53937187, 0.11657228, 0.09469818,
-           0.25880558, 0.07063052, 0.11524739, 0.08227149, 0.13042509,
-           0.49534386, 0.07178925, 0.3126294 , 0.28824926, 0.25066523,
-           0.2132999 , 0.36531926, 0.64150673, 0.08124273, 0...
-           0.71015324, 0.1375872 , 0.10718306, 0.73360059, 0.0774336 ,
-           0.05972806, 0.12817684, 0.48768923, 0.40007808, 0.96196336,
-           0.14680267, 0.11424985, 0.15524923, 0.52084544, 0.09501248,
-           0.85510326, 0.23217319, 0.52223399, 0.59602222, 0.2098567 ,
-           0.46080418, 0.14908991, 0.56755986, 0.59005505, 0.27265958,
-           0.09611405, 0.91465952, 0.85313787, 0.32016594, 0.95285913,
-           0.22548781, 0.15398784, 0.19865442, 0.05737153, 0.25905621]))
-
-
 
 CV results can be found in the attribute `est_cv.cv_results_` and can be easily converted to a Pandas `DataFrame`. The best result corresponds to the row with index `est_cv.best_index_`.
 
@@ -224,30 +201,30 @@ cv_res.loc[est_cv.best_index_, :]
 
 
 
-    structure_penalty                         0.062040
+    structure_penalty                         0.114250
     max_rank                                 10.000000
-    factor_penalty                            0.069416
-    objective_value_penalized                 1.934370
-    mean_elapsed_process_time_penalized       6.977537
+    factor_penalty                            0.058822
+    objective_value_penalized                 2.014111
+    mean_elapsed_process_time_penalized       7.679406
     std_elapsed_process_time_penalized        0.000000
     est_max_rank                              5.000000
     structural_zeros                         30.000000
-    factor_zeros                           1746.000000
-    neg_mean_squared_error_fold0             -0.000193
-    neg_mean_squared_error_fold1             -0.000179
-    neg_mean_squared_error_fold2             -0.000181
-    neg_mean_squared_error_fold3             -0.000185
-    neg_mean_squared_error_fold4             -0.000189
-    neg_mean_squared_error_fold5             -0.000184
-    neg_mean_squared_error_fold6             -0.000190
-    neg_mean_squared_error_fold7             -0.000184
-    neg_mean_squared_error_fold8             -0.000182
-    neg_mean_squared_error_fold9             -0.000189
-    mean_elapsed_process_time_fixed           1.265778
-    std_elapsed_process_time_fixed            0.094385
-    mean_neg_mean_squared_error              -0.000186
-    std_neg_mean_squared_error                0.000004
-    Name: 1, dtype: float64
+    factor_zeros                           1748.000000
+    neg_mean_squared_error_fold0             -0.000191
+    neg_mean_squared_error_fold1             -0.000189
+    neg_mean_squared_error_fold2             -0.000196
+    neg_mean_squared_error_fold3             -0.000169
+    neg_mean_squared_error_fold4             -0.000199
+    neg_mean_squared_error_fold5             -0.000188
+    neg_mean_squared_error_fold6             -0.000184
+    neg_mean_squared_error_fold7             -0.000185
+    neg_mean_squared_error_fold8             -0.000191
+    neg_mean_squared_error_fold9             -0.000181
+    mean_elapsed_process_time_fixed           1.367407
+    std_elapsed_process_time_fixed            0.169312
+    mean_neg_mean_squared_error              -0.000187
+    std_neg_mean_squared_error                0.000008
+    Name: 76, dtype: float64
 
 
 
@@ -261,25 +238,25 @@ for k, d in est_cv.best_estimator_.ds_.items():
     )
 ```
 
-    (0, 1)    : [ 7.40 -3.27  4.59  0.00 -0.00]
-    (0, 2)    : [-8.43 -0.00 -0.00 -5.15  0.00]
-    (1, 2, 0) : [-6.60  4.34  0.00 -0.00 -4.49]
-    (1, 2, 1) : [ 0.00  4.82 -9.21  0.00  0.00]
+    (0, 1)    : [ 3.92 -0.00 -5.24  0.00  7.43]
+    (0, 2)    : [-0.00  5.06  0.00 -0.00 -8.45]
+    (1, 2, 0) : [-4.26 -0.00  0.00 -4.17 -6.58]
+    (1, 2, 1) : [-4.84  0.00 -9.23  0.00  0.00]
 
 
 Due to the small size of the data sources and signal-to-noise ratio of 0.5, it is not possible to recover singular values perfectly. However, thanks to unpenalized re-estimation, the strong shrinkage seen in the manual solution above is not present here.
 
-The factor estimates are in `est_cv.best_estimator_.vs_`, however, sparse factors can be found in `est_cv.best_estimator_.us_`. In this particular run, factor 0 of view 0 in the groundtruth corresponds to factor 0 in view 0 of the estimate. Note that in general factor order is arbitrary.
+The factor estimates are in `est_cv.best_estimator_.vs_`, however, sparse factors can be found in `est_cv.best_estimator_.us_`. In this particular run, factor 1 of view 0 in the groundtruth corresponds to factor 5 in view 0 of the estimate. Note that in general factor order is arbitrary.
 
 
 ```python
-np.sum(xs_sim["vs"][0][:, 0] * est_cv.best_estimator_.us_[0][:, 0])
+np.sum(xs_sim["vs"][0][:, 0] * est_cv.best_estimator_.us_[0][:, 4])
 ```
 
 
 
 
-    0.9886157937798741
+    -0.9878174758052286
 
 
 
@@ -303,10 +280,10 @@ def false_positive_rate(estimate, truth):
 ```python
 (
     true_positive_rate(
-        xs_sim["vs"][0][:, 0], est_cv.best_estimator_.us_[0][:, 0]
+        xs_sim["vs"][0][:, 0], est_cv.best_estimator_.us_[0][:, 4]
     ),
     false_positive_rate(
-        xs_sim["vs"][0][:, 0], est_cv.best_estimator_.us_[0][:, 0]
+        xs_sim["vs"][0][:, 0], est_cv.best_estimator_.us_[0][:, 4]
     ),
 )
 ```
@@ -314,6 +291,6 @@ def false_positive_rate(estimate, truth):
 
 
 
-    (0.6578947368421053, 0.0)
+    (0.6410256410256411, 0.0)
 
 
