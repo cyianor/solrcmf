@@ -205,7 +205,7 @@ cv_res.loc[est_cv.best_index_, :]
     max_rank                                 10.000000
     factor_penalty                            0.058822
     objective_value_penalized                 2.014111
-    mean_elapsed_process_time_penalized       7.571215
+    mean_elapsed_process_time_penalized       5.931681
     std_elapsed_process_time_penalized        0.000000
     est_max_rank                              5.000000
     structural_zeros                         30.000000
@@ -220,8 +220,8 @@ cv_res.loc[est_cv.best_index_, :]
     neg_mean_squared_error_fold7             -0.000185
     neg_mean_squared_error_fold8             -0.000191
     neg_mean_squared_error_fold9             -0.000181
-    mean_elapsed_process_time_fixed           1.297466
-    std_elapsed_process_time_fixed            0.131769
+    mean_elapsed_process_time_fixed           0.990001
+    std_elapsed_process_time_fixed            0.108464
     mean_neg_mean_squared_error              -0.000187
     std_neg_mean_squared_error                0.000008
     Name: 76, dtype: float64
@@ -250,13 +250,13 @@ The factor estimates are in `est_cv.best_estimator_.vs_`, however, sparse factor
 
 
 ```python
-np.sum(xs_sim["vs"][0][:, 0] * est_cv.best_estimator_.us_[0][:, 4])
+sum(xs_sim["vs"][0][:, 0] * est_cv.best_estimator_.us_[0][:, 4])
 ```
 
 
 
 
-    -0.9878174758052286
+    np.float64(-0.9878174758052283)
 
 
 
@@ -291,6 +291,11 @@ def false_positive_rate(estimate, truth):
 
 
 
-    (0.6410256410256411, 0.0)
+    (np.float64(0.6410256410256411), np.float64(0.0))
 
 
+
+
+```python
+
+```

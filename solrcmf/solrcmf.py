@@ -29,6 +29,12 @@ from .metrics import neg_mean_squared_error
 
 
 class SolrCMF(ADMM):
+    """Sparse orthgonal low-rank Collective Matrix Factorization
+
+    Implements sparse orthogonal low-rank Collective Matrix Factorization
+    (solrCMF).
+    """
+
     _parameter_constraints = {
         **ADMM._parameter_constraints,
         "structure_penalty": [Interval(Real, 0, None, closed="left"), None],

@@ -1,0 +1,52 @@
+site_name: "solrCMF"
+site_url: https://cyianor.github.io/solrcmf
+theme:
+  name: material
+  custom_dir: overrides
+  palette:
+    # Palette toggle for light mode
+    - media: "(prefers-color-scheme: light)"
+      primary: indigo
+      scheme: default
+      toggle:
+        icon: material/brightness-7 
+        name: Switch to dark mode
+    # Palette toggle for dark mode
+    - media: "(prefers-color-scheme: dark)"
+      primary: indigo
+      scheme: slate
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+nav:
+  - Overview: index.md
+  - Getting Started: getting-started.ipynb
+  - API Reference: reference.md
+
+markdown_extensions:
+  - pymdownx.blocks.admonition
+  - pymdownx.blocks.details
+  - pymdownx.blocks.tab:
+      alternate_style: true
+      slugify: !!python/object/apply:pymdownx.slugs.slugify
+        kwds:
+          case: lower
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+
+plugins:
+- search
+- mkdocstrings:
+    handlers:
+      python:
+        options:
+          docstring_style: numpy
+          show_bases: false
+          summary: true
+- mkdocs-jupyter:
+    include_source: True

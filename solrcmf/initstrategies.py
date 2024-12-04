@@ -48,6 +48,28 @@ def best_random_init(
     rng: Generator | int | None = None,
     **kwargs,
 ) -> SolrCMF:
+    """Generate best unpenalized solution from random starting points
+
+    Parameters
+    ----------
+    xs
+        Input data
+    max_rank
+        Maximum rank
+    n_inits
+        Number of random starting points to test
+    n_jobs
+        Number of jobs to run concurrently, use as in [joblib.Parallel](https://joblib.readthedocs.io/en/stable/generated/joblib.Parallel.html#joblib.Parallel)
+    rng
+        Random number generator ([numpy.random.Generator](https://numpy.org/doc/stable/reference/random/generator.html)), random seed, or `None`
+        to choose the default random number generator.
+
+    Returns
+    -------
+    fit : SolrCMF
+        The solution found with minimal objective value among all solutions
+        obtained from the `n_inits` random starting points.
+    """
     assert n_inits > 0, "`n_inits` needs to be a positive integer"
 
     rng = default_rng(rng)
