@@ -3,6 +3,7 @@ from numpy import float64, hstack, vstack, diag, inf
 from numpy.linalg import svd
 from numpy.random import Generator, default_rng
 from joblib import Parallel, delayed
+from typing import Hashable
 
 from .base import ViewDesc
 from .solrcmf import SolrCMF
@@ -11,7 +12,7 @@ from .solrcmf import SolrCMF
 def multiview_init(
     xs: dict[ViewDesc, NDArray[float64]],
     max_rank: int,
-):
+) -> tuple[dict[Hashable, NDArray[float64]], dict[ViewDesc, NDArray[float64]]]:
     layout = list(xs.keys())
     if len({k[0] for k in layout}) == 1:
         x_joint = hstack([x for x in xs.values()]).T
@@ -46,10 +47,14 @@ def best_random_init(
     n_jobs: int = -1,
     rng: Generator | int | None = None,
     **kwargs,
-):
+) -> SolrCMF:
+    assert n_inits > 0, "`n_inits` needs to be a positive integer"
+
     rng = default_rng(rng)
 
-    def init_run(xs, rng):
+    def init_run(
+        xs: dict[ViewDesc, NDArray[float64]], rng: Generator
+    ) -> SolrCMF:
         return SolrCMF(
             structure_penalty=0.0,
             max_rank=max_rank,
@@ -61,12 +66,11 @@ def best_random_init(
 
     rng_inits = rng.spawn(n_inits)
 
-    ests_init = Parallel(n_jobs=n_jobs)(
+    ests_init: list[SolrCMF] = Parallel(n_jobs=n_jobs)(
         delayed(init_run)(xs, ri) for ri in rng_inits
     )
 
     best_obj = inf
-    best_est_init = None
 
     for i in range(n_inits):
         if ests_init[i].objective_value_ < best_obj:
