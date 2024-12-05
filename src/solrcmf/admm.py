@@ -4,12 +4,14 @@ from time import process_time
 from sklearn.base import BaseEstimator
 from sklearn.utils._param_validation import Interval
 from numbers import Real, Integral
-from typing import Any
+from typing import Any, Generic, TypeVar
 
 from .base import Context
 
+ContextType = TypeVar("ContextType", bound=Context)
 
-class ADMM(BaseEstimator, ABC):
+
+class ADMM(Generic[ContextType], BaseEstimator, ABC):
     _parameter_constraints = {
         "max_iter": [Interval(Integral, 1, None, closed="left")],
         "abs_tol": [Interval(Real, 0, None, closed="neither")],
@@ -32,7 +34,7 @@ class ADMM(BaseEstimator, ABC):
         self.save_ctx = save_ctx
 
     @abstractmethod
-    def _setup(self, X, **kwargs) -> Context:
+    def _setup(self, X, **kwargs) -> ContextType:
         """Setup the estimation problem.
 
         Called after data is available.
@@ -40,6 +42,9 @@ class ADMM(BaseEstimator, ABC):
         raise NotImplementedError(
             f"_setup method on {self.__class__.__name__} not implemented"
         )
+
+    # Type-checking
+    def _validate_params(self) -> None: ...
 
     def fit(self, X, y=None, **kwargs):
         # Validate parameters; should check parameters of
@@ -101,11 +106,11 @@ class ADMM(BaseEstimator, ABC):
     def transform(self, X, y=None, **kwargs):
         pass
 
-    def _extra_attrs(self, ctx: Context) -> dict[str, Any]:
+    def _extra_attrs(self, ctx: ContextType) -> dict[str, Any]:
         return {}
 
 
-def _objective(ctx: Context):
+def _objective[B, C](ctx: Context[B, C]) -> float:
     val = 0.0
 
     for name, idx in ctx.block_order:

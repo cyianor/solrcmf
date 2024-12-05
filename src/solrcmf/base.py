@@ -28,7 +28,7 @@ class Context[BlocksType, ConstraintsType]:
             NDArray[float64],
         ] = {}
         self.params: dict[str, Any] = {}
-        self.block_order: list[tuple] = []
+        self.block_order: list[tuple[str, BlockDesc]] = []
 
     def add_block(
         self,

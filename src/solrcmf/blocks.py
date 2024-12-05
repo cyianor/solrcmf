@@ -41,13 +41,21 @@ class SolrCMFConstraints:
 @dataclass
 class SolrCMFParams:
     rho: float
+    alpha: float
     flat_indices: dict[ViewDesc, NDArray[intp]]
     fixed_structure_pattern: bool
     structure_pattern: dict[ViewDesc, NDArray[bool_]]
     structure_penalty: float
-    structure_weights: dict[ViewDesc, NDArray[float64] | float]
+    structure_weights: dict[ViewDesc, NDArray[float64] | float64]
     factor_pruning: bool
     max_rank: int
+    factor_sparsity: bool
+    fixed_factor_pattern: bool
+    factor_pattern: dict[Entity, NDArray[bool_]]
+    factor_penalty: float
+    factor_weights: dict[Entity, NDArray[float64] | float64]
+    vidx_ridx: dict[Entity, list[tuple[ViewDesc, Entity]]]
+    vidx_cidx: dict[Entity, list[tuple[ViewDesc, Entity]]]
 
 
 SolrCMFContext = Context[SolrCMFBlocks, SolrCMFConstraints]

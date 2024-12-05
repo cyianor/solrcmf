@@ -27,9 +27,6 @@ from tempfile import TemporaryDirectory
 from pathlib import Path
 from typing import Generator, Any
 
-# from os import mkdir
-# from os.path import exists
-
 from sklearn.base import BaseEstimator, clone
 from sklearn.utils._param_validation import Interval, StrOptions
 from numbers import Real, Integral
@@ -295,6 +292,7 @@ class SolrCMFCV(BaseEstimator):
                 )
 
                 if est.init == "random":
+                    assert isinstance(est.init_kwargs, dict)  # type-checking
                     est.init_kwargs["rng"] = default_rng(rng)
 
                 est.fit(

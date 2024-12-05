@@ -35,6 +35,8 @@ from .blocks import (
 )
 from .metrics import neg_mean_squared_error
 
+ContextType = Context[SolrCMFBlocks, SolrCMFConstraints]
+
 
 class SolrCMFParams(TypedDict):
     structure_penalty: float
@@ -44,7 +46,7 @@ class SolrCMFParams(TypedDict):
     factor_penalty: float
 
 
-class SolrCMF(ADMM):
+class SolrCMF(ADMM[ContextType]):
     """Sparse orthgonal low-rank Collective Matrix Factorization
 
     Implements sparse orthogonal low-rank Collective Matrix Factorization
