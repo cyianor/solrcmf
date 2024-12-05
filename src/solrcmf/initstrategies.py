@@ -69,7 +69,7 @@ def best_random_init(
         The solution found with minimal objective value among all solutions
         obtained from the `n_inits` random starting points.
     """
-    assert n_inits > 0, "`n_inits` needs to be a positive integer"
+    assert n_inits > 0, "'n_init' needs to be a positive integer"
 
     rng = default_rng(rng)
 

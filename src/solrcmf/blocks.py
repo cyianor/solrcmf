@@ -50,8 +50,11 @@ class SolrCMFParams:
     max_rank: int
 
 
-class ZBlock(Block[SolrCMFBlocks, SolrCMFConstraints, ViewDesc]):
-    def update(self, ctx: Context):
+SolrCMFContext = Context[SolrCMFBlocks, SolrCMFConstraints]
+
+
+class ZBlock(Block[SolrCMFContext, ViewDesc]):
+    def update(self, ctx: SolrCMFContext):
         self.value = (1.0 - 1.0 / (1.0 + ctx.params["rho"])) * (
             ctx.blocks.v[self.idx[0]].value
             @ diag(ctx.blocks.d[self.idx].value)
@@ -65,7 +68,7 @@ class ZBlock(Block[SolrCMFBlocks, SolrCMFConstraints, ViewDesc]):
             * ctx.data[self.idx].flat[ctx.params["flat_indices"][self.idx]]
         )
 
-    def objective(self, ctx: Context) -> float:
+    def objective(self, ctx: SolrCMFContext) -> float:
         return 0.5 * sum(
             (
                 ctx.data[self.idx].flat[ctx.params["flat_indices"][self.idx]]
@@ -75,8 +78,8 @@ class ZBlock(Block[SolrCMFBlocks, SolrCMFConstraints, ViewDesc]):
         )
 
 
-class DBlock(Block[SolrCMFBlocks, SolrCMFConstraints, ViewDesc]):
-    def update(self, ctx: Context):
+class DBlock(Block[SolrCMFContext, ViewDesc]):
+    def update(self, ctx: SolrCMFContext):
         tmp = diag(
             ctx.blocks.v[self.idx[0]].value.T
             @ (
@@ -105,7 +108,7 @@ class DBlock(Block[SolrCMFBlocks, SolrCMFConstraints, ViewDesc]):
         if ctx.params["factor_pruning"]:
             self.active_factors = self.value != 0.0
 
-    def objective(self, ctx: Context) -> float:
+    def objective(self, ctx: SolrCMFContext) -> float:
         if ctx.params["fixed_structure_pattern"]:
             return 0.0
 
@@ -116,8 +119,8 @@ class DBlock(Block[SolrCMFBlocks, SolrCMFConstraints, ViewDesc]):
         ).sum()
 
 
-class VBlock(Block[SolrCMFBlocks, SolrCMFConstraints, Entity]):
-    def update(self, ctx: Context):
+class VBlock(Block[SolrCMFContext, Entity]):
+    def update(self, ctx: SolrCMFContext):
         if ctx.params["factor_pruning"]:
             active_factors = (
                 vstack([d.active_factors for d in ctx.blocks.d.values()]).sum(
@@ -192,12 +195,12 @@ class VBlock(Block[SolrCMFBlocks, SolrCMFConstraints, Entity]):
         u, _, vt = svd(tmp, full_matrices=False)
         self.value = u @ vt
 
-    def objective(self, ctx: Context) -> float:
+    def objective(self, ctx: SolrCMFContext) -> float:
         return 0.0
 
 
-class UBlock(Block[SolrCMFBlocks, SolrCMFConstraints, Entity]):
-    def update(self, ctx: Context):
+class UBlock(Block[SolrCMFContext, Entity]):
+    def update(self, ctx: SolrCMFContext):
         m = (
             ctx.blocks.v[self.idx].value
             + ctx.blocks.vp[self.idx].value
@@ -239,7 +242,7 @@ class UBlock(Block[SolrCMFBlocks, SolrCMFConstraints, Entity]):
         # Column-normalize
         self.value = m / sqrt((m**2).sum(0))
 
-    def objective(self, ctx: Context) -> float:
+    def objective(self, ctx: SolrCMFContext) -> float:
         if ctx.params["fixed_factor_pattern"]:
             return 0.0
 
@@ -250,8 +253,8 @@ class UBlock(Block[SolrCMFBlocks, SolrCMFConstraints, Entity]):
         ).sum()
 
 
-class VpBlock(Block[SolrCMFBlocks, SolrCMFConstraints, Entity]):
-    def update(self, ctx: Context):
+class VpBlock(Block[SolrCMFContext, Entity]):
+    def update(self, ctx: SolrCMFContext):
         self.value = (
             ctx.params["rho"]
             / (
@@ -265,7 +268,7 @@ class VpBlock(Block[SolrCMFBlocks, SolrCMFConstraints, Entity]):
             )
         )
 
-    def objective(self, ctx: Context) -> float:
+    def objective(self, ctx: SolrCMFContext) -> float:
         return (
             0.5
             * ctx.params["mu"]
@@ -274,10 +277,8 @@ class VpBlock(Block[SolrCMFBlocks, SolrCMFConstraints, Entity]):
         )
 
 
-class MeanStructureConstraint(
-    Constraint[SolrCMFBlocks, SolrCMFConstraints, ViewDesc]
-):
-    def constraint(self, ctx: Context) -> NDArray[float64]:
+class MeanStructureConstraint(Constraint[SolrCMFContext, ViewDesc]):
+    def constraint(self, ctx: SolrCMFContext) -> NDArray[float64]:
         return (
             ctx.blocks.z[self.idx].value
             - ctx.blocks.v[self.idx[0]].value
@@ -286,8 +287,8 @@ class MeanStructureConstraint(
         )
 
 
-class FactorConstraint(Constraint[SolrCMFBlocks, SolrCMFConstraints, Entity]):
-    def constraint(self, ctx: Context) -> NDArray[float64]:
+class FactorConstraint(Constraint[SolrCMFContext, Entity]):
+    def constraint(self, ctx: SolrCMFContext) -> NDArray[float64]:
         return (
             ctx.blocks.u[self.idx].value
             - ctx.blocks.v[self.idx].value

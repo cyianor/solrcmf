@@ -18,13 +18,14 @@ from numpy import (
     full,
     sum,
     nan,
+    array,
 )
 from numpy.random import default_rng
 from warnings import warn
 from joblib import delayed, Parallel, dump, load
 from tempfile import TemporaryDirectory
 from pathlib import Path
-from collections.abc import Hashable
+from typing import Generator, Any
 
 # from os import mkdir
 # from os.path import exists
@@ -33,7 +34,7 @@ from sklearn.base import BaseEstimator, clone
 from sklearn.utils._param_validation import Interval, StrOptions
 from numbers import Real, Integral
 
-from .base import ViewDesc
+from .base import ViewDesc, Entity
 from .solrcmf import SolrCMF
 from .splits import BaseSplitter, ElementwiseFolds
 from .metrics import (
@@ -41,6 +42,19 @@ from .metrics import (
     neg_sum_squared_error,
     weighted_neg_mean_squared_error,
 )
+
+InitsGeneratorType = Generator[
+    tuple[
+        int,
+        tuple[
+            dict[Entity, NDArray[float64]] | None,
+            dict[ViewDesc, NDArray[float64]] | None,
+            dict[Entity, NDArray[float64]] | None,
+        ],
+    ],
+    Any,
+    None,
+]
 
 
 class SolrCMFCV(BaseEstimator):
@@ -133,9 +147,14 @@ class SolrCMFCV(BaseEstimator):
         self.n_jobs = n_jobs
 
     def _check_parameter_grid(self):
+        if self.factor_penalty is None:
+            factor_penalty = array([None])
+        else:
+            factor_penalty = atleast_1d(self.factor_penalty)
+
         # Scalars to 1d-arrays
-        structure_penalty, max_rank, factor_penalty = atleast_1d(
-            self.structure_penalty, self.max_rank, self.factor_penalty
+        structure_penalty, max_rank = atleast_1d(
+            self.structure_penalty, self.max_rank
         )
 
         # Check that all are indeed 1d
@@ -156,6 +175,8 @@ class SolrCMFCV(BaseEstimator):
 
         return list(zip(structure_penalty, max_rank, factor_penalty))
 
+    def _validate_params(self) -> None: ...
+
     def fit(
         self,
         X: dict[ViewDesc, NDArray[float64]],
@@ -164,11 +185,10 @@ class SolrCMFCV(BaseEstimator):
         structure_weights: (
             dict[ViewDesc, NDArray[float64] | float64] | None
         ) = None,
-        factor_weights: dict[Hashable, NDArray[float64] | float64]
-        | None = None,
-        vs: list[dict[Hashable, NDArray[float64]]] | None = None,
+        factor_weights: dict[Entity, NDArray[float64] | float64] | None = None,
+        vs: list[dict[Entity, NDArray[float64]]] | None = None,
         ds: list[dict[ViewDesc, NDArray[float64]]] | None = None,
-        us: list[dict[Hashable, NDArray[float64]]] | None = None,
+        us: list[dict[Entity, NDArray[float64]]] | None = None,
     ):
         self._validate_params()
 
@@ -177,7 +197,7 @@ class SolrCMFCV(BaseEstimator):
         n_params = len(parameter_grid)
 
         if isinstance(self.cv, Integral):
-            cv = ElementwiseFolds(self.cv)
+            cv = ElementwiseFolds(int(self.cv))
         elif isinstance(self.cv, BaseSplitter):
             cv = self.cv
 
@@ -199,29 +219,12 @@ class SolrCMFCV(BaseEstimator):
         else:
             init_kwargs = self.init_kwargs
 
-        # If one of these is provided all need to be the same length
-        # (if only vs and ds are provided then us is a list of None)
-        if vs is not None or ds is not None or us is not None:
-            assert (
-                vs is not None and ds is not None and len(vs) == len(ds) >= 1
-            ), (
-                "If initial values are provided to"
-                f" {self.__class__.__name__}.fit(), then 'vs' and 'ds' both"
-                " need to provided and have to be the same length"
-            )
-
-            assert us is None or len(us) == len(vs), (
-                "If initial values for 'u' are provided to"
-                f" {self.__class__.__name__}.fit(), then 'us' needs have the"
-                " same length as 'vs' and 'ds'"
-            )
-
         if self.init == "random":
             n_reps = 1
             if "repetitions" in init_kwargs:
                 n_reps = init_kwargs.pop("repetitions")
 
-            def inits():
+            def inits() -> InitsGeneratorType:
                 for i in range(n_reps):
                     yield i, (None, None, None)
 
@@ -230,11 +233,27 @@ class SolrCMFCV(BaseEstimator):
                 rng = default_rng(init_kwargs["rng"])
             else:
                 rng = default_rng()
-
         elif self.init == "custom":
+            # If one of these is provided all need to be the same length
+            # (if only vs and ds are provided then us is treated as
+            # a list of None)
+            assert (
+                vs is not None and ds is not None and len(vs) == len(ds) >= 1
+            ), (
+                "If initial values are provided to"
+                f" {self.__class__.__name__}.fit(), then 'vs' and 'ds'"
+                " both need to provided and have to be the same length"
+            )
+
+            assert us is None or len(us) == len(vs), (
+                "If initial values for 'u' are provided to"
+                f" {self.__class__.__name__}.fit(), then 'us' needs to"
+                " have the same length as 'vs' and 'ds'"
+            )
+
             n_reps = len(vs)
 
-            def inits():
+            def inits() -> InitsGeneratorType:
                 for i in range(n_reps):
                     yield i, (vs[i], ds[i], us[i] if us is not None else None)
 
@@ -750,7 +769,7 @@ class SolrCMFCV(BaseEstimator):
                 / f"{self.best_index_}_{best_runs[self.best_index_]}.pkl"
             )
 
-            self.best_estimator_ = clone(base_est)
+            self.best_estimator_: SolrCMF = clone(base_est)
 
             if self.refit.endswith("debiased"):
                 self.best_estimator_.set_params(
@@ -797,7 +816,7 @@ class SolrCMFCV(BaseEstimator):
                 ds_init = None
                 us_init = None
 
-            final_est = clone(base_est)
+            final_est: SolrCMF = clone(base_est)
             final_est.set_params(
                 structure_penalty=structure_penalty,
                 max_rank=max_rank,
@@ -811,7 +830,7 @@ class SolrCMFCV(BaseEstimator):
             )
 
             if self.refit.endswith("debiased"):
-                final_est_debiased = clone(base_est)
+                final_est_debiased: SolrCMF = clone(base_est)
                 final_est_debiased.set_params(
                     init="custom",
                     init_kwargs={"reduce_max_rank": True},

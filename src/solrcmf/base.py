@@ -14,13 +14,13 @@ Entity = str | int
 BlockDesc = tuple[Entity, Unpack[tuple[Entity, ...]]] | Entity
 ViewDesc = tuple[Entity, Entity, Unpack[tuple[Entity, ...]]]
 
-Blocks = TypeVar("Blocks")
-Constraints = TypeVar("Constraints")
-Index = TypeVar("Index")
+BlocksType = TypeVar("BlocksType")
+ConstraintsType = TypeVar("ConstraintsType")
+IndexType = TypeVar("IndexType")
 
 
-class Context[Blocks, Constraints]:
-    def __init__(self, blocks: Blocks, constraints: Constraints):
+class Context[BlocksType, ConstraintsType]:
+    def __init__(self, blocks: BlocksType, constraints: ConstraintsType):
         self.blocks = blocks
         self.constraints = constraints
         self.data: dict[
@@ -52,13 +52,16 @@ class Context[Blocks, Constraints]:
         )
 
 
-class Block(Generic[Blocks, Constraints, Index], metaclass=ABCMeta):
+ContextType = TypeVar("ContextType", bound=Context)
+
+
+class Block(Generic[ContextType, IndexType], metaclass=ABCMeta):
     value: NDArray[float64]
 
     def __init__(
         self,
         name: str,
-        idx: Index,
+        idx: IndexType,
         shape: tuple[int, ...],
     ):
         self.name = name
@@ -68,29 +71,27 @@ class Block(Generic[Blocks, Constraints, Index], metaclass=ABCMeta):
         self.initialized = False
 
     @abstractmethod
-    def update(self, ctx: Context[Blocks, Constraints]):
+    def update(self, ctx: ContextType):
         pass
 
     @abstractmethod
-    def objective(self, ctx: Context[Blocks, Constraints]) -> float:
+    def objective(self, ctx: ContextType) -> float:
         return 0.0
 
 
-class Constraint(Block[Blocks, Constraints, Index], metaclass=ABCMeta):
+class Constraint(Block[ContextType, IndexType], metaclass=ABCMeta):
     """Base class for (multi-)affine constraints"""
 
     @abstractmethod
-    def constraint(
-        self, ctx: Context[Blocks, Constraints]
-    ) -> NDArray[float64]:
+    def constraint(self, ctx: ContextType) -> NDArray[float64]:
         """Returns the lhs of a constraint f(x) = 0"""
         pass
 
-    def update(self, ctx: Context[Blocks, Constraints]):
+    def update(self, ctx: ContextType):
         """Update the multipliers"""
         self.value += self.constraint(ctx)
 
-    def objective(self, ctx: Context[Blocks, Constraints]) -> float:
+    def objective(self, ctx: ContextType) -> float:
         return (
             0.5
             * ctx.params["rho"]

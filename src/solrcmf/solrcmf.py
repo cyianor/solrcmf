@@ -18,7 +18,6 @@ from warnings import warn
 from sklearn.utils.validation import check_is_fitted, check_array
 from sklearn.utils._param_validation import Interval, StrOptions
 from numbers import Real, Integral
-from collections.abc import Hashable
 
 from .base import Context, ViewDesc, Entity
 from .admm import ADMM
@@ -55,6 +54,7 @@ class SolrCMF(ADMM):
     vs_: dict[Entity, NDArray[float64]]
     ds_: dict[ViewDesc, NDArray[float64]]
     us_: dict[Entity, NDArray[float64]]
+    est_max_rank_: int
 
     _parameter_constraints = {
         **ADMM._parameter_constraints,
