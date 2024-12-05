@@ -3,16 +3,15 @@ from numpy import float64, hstack, vstack, diag, inf
 from numpy.linalg import svd
 from numpy.random import Generator, default_rng
 from joblib import Parallel, delayed
-from typing import Hashable
 
-from .base import ViewDesc
+from .base import ViewDesc, Entity
 from .solrcmf import SolrCMF
 
 
 def multiview_init(
     xs: dict[ViewDesc, NDArray[float64]],
     max_rank: int,
-) -> tuple[dict[Hashable, NDArray[float64]], dict[ViewDesc, NDArray[float64]]]:
+) -> tuple[dict[Entity, NDArray[float64]], dict[ViewDesc, NDArray[float64]]]:
     layout = list(xs.keys())
     if len({k[0] for k in layout}) == 1:
         x_joint = hstack([x for x in xs.values()]).T

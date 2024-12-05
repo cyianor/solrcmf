@@ -3,60 +3,62 @@ from __future__ import annotations
 from abc import ABCMeta, abstractmethod
 from numpy.typing import NDArray
 from numpy import float64
-from typing import Any
-from collections.abc import Hashable
+from typing import Any, TypeVar, Generic
 
 try:
     from typing import Unpack
 except ImportError:
     from typing_extensions import Unpack
 
+Entity = str | int
+BlockDesc = tuple[Entity, Unpack[tuple[Entity, ...]]] | Entity
+ViewDesc = tuple[Entity, Entity, Unpack[tuple[Entity, ...]]]
 
-ViewDesc = tuple[Hashable, Hashable, Unpack[tuple[Hashable, ...]]]
+Blocks = TypeVar("Blocks")
+Constraints = TypeVar("Constraints")
+Index = TypeVar("Index")
 
 
-class Context:
-    def __init__(self):
-        self.blocks: dict[str, dict[ViewDesc, Block]] = {}
-        self.constraints: dict[str, dict[ViewDesc, Constraint]] = {}
+class Context[Blocks, Constraints]:
+    def __init__(self, blocks: Blocks, constraints: Constraints):
+        self.blocks = blocks
+        self.constraints = constraints
         self.data: dict[
             ViewDesc,
             NDArray[float64],
         ] = {}
         self.params: dict[str, Any] = {}
-        self.block_order = []
+        self.block_order: list[tuple] = []
 
     def add_block(
         self,
         name: str,
-        idx: ViewDesc,
+        idx: BlockDesc,
         block_type: type[Block],
         shape: tuple[int, ...],
     ):
         self.block_order.append((name, idx))
-        if name not in self.blocks:
-            self.blocks.update({name: {}})
-
-        self.blocks[name][idx] = block_type(name, idx, shape)
+        getattr(self.blocks, name)[idx] = block_type(name, idx, shape)
 
     def add_constraint(
         self,
         name: str,
-        idx: ViewDesc,
+        idx: BlockDesc,
         constraint_type: type[Constraint],
         shape: tuple[int, ...],
     ):
-        if name not in self.constraints:
-            self.constraints.update({name: {}})
+        getattr(self.constraints, name)[idx] = constraint_type(
+            name, idx, shape
+        )
 
-        self.constraints[name][idx] = constraint_type(name, idx, shape)
 
+class Block(Generic[Blocks, Constraints, Index], metaclass=ABCMeta):
+    value: NDArray[float64]
 
-class Block(metaclass=ABCMeta):
     def __init__(
         self,
         name: str,
-        idx: ViewDesc,
+        idx: Index,
         shape: tuple[int, ...],
     ):
         self.name = name
@@ -66,27 +68,29 @@ class Block(metaclass=ABCMeta):
         self.initialized = False
 
     @abstractmethod
-    def update(self, ctx: Context):
+    def update(self, ctx: Context[Blocks, Constraints]):
         pass
 
     @abstractmethod
-    def objective(self, ctx: Context) -> float:
+    def objective(self, ctx: Context[Blocks, Constraints]) -> float:
         return 0.0
 
 
-class Constraint(Block, metaclass=ABCMeta):
+class Constraint(Block[Blocks, Constraints, Index], metaclass=ABCMeta):
     """Base class for (multi-)affine constraints"""
 
     @abstractmethod
-    def constraint(self, ctx: Context) -> NDArray[float64]:
+    def constraint(
+        self, ctx: Context[Blocks, Constraints]
+    ) -> NDArray[float64]:
         """Returns the lhs of a constraint f(x) = 0"""
         pass
 
-    def update(self, ctx: Context):
+    def update(self, ctx: Context[Blocks, Constraints]):
         """Update the multipliers"""
         self.value += self.constraint(ctx)
 
-    def objective(self, ctx: Context) -> float:
+    def objective(self, ctx: Context[Blocks, Constraints]) -> float:
         return (
             0.5
             * ctx.params["rho"]

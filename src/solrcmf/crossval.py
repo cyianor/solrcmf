@@ -623,9 +623,9 @@ class SolrCMFCV(BaseEstimator):
                         best_score[idx_params] = mean(scores_inits)
                         best_runs[idx_params] = idx_init
                         for i in range(n_folds):
-                            results[f"{self.score}_fold{i}"][
-                                idx_params
-                            ] = scores_inits[i]
+                            results[f"{self.score}_fold{i}"][idx_params] = (
+                                scores_inits[i]
+                            )
 
             elapsed_process_times = split(
                 asarray(elapsed_process_times), n_params

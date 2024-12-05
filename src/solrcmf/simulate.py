@@ -49,30 +49,28 @@ def simulate(
     if rng is None:
         rng = default_rng()
 
-    factor_scales = {
-        k: atleast_1d(v) for k, v in factor_scales.items()
-    }
-    shapes = [s.shape for s in factor_scales.values()]
+    factor_scales_ = {k: atleast_1d(v) for k, v in factor_scales.items()}
+    shapes = [s.shape for s in factor_scales_.values()]
     assert all(
         [len(s) == 1 and s == shapes[0] for s in shapes]
     ), "Each value in 'factor_scales' needs to be a of shape (max_rank,)"
     max_rank = shapes[0][0]
-    assert all(len(k) >= 2 for k in factor_scales.keys()), (
+    assert all(len(k) >= 2 for k in factor_scales_.keys()), (
         "Each key in 'factor_scales' needs to be a tuple of two"
         " or more integers"
     )
 
-    views = set([k[i] for k in factor_scales.keys() for i in range(2)])
+    views = set([k[i] for k in factor_scales_.keys() for i in range(2)])
     assert views == viewdims.keys(), (
         "The keys of 'viewdims' need to appear in the first two entries"
         " of the keys of 'factor_scales'"
     )
 
     if scales is None:
-        scales = {k: 1.0 for k in factor_scales.keys()}
+        scales = {k: 1.0 for k in factor_scales_.keys()}
 
     assert (
-        scales.keys() == factor_scales.keys()
+        scales.keys() == factor_scales_.keys()
     ), "'scales' needs to be compatible with 'factor_scales'"
     assert all(
         s > 0.0 for s in scales.values()
@@ -80,14 +78,14 @@ def simulate(
 
     if isinstance(snr, dict):
         assert (
-            snr.keys() == factor_scales.keys()
+            snr.keys() == factor_scales_.keys()
         ), "'snr' needs to be compatible with 'factor_scales'"
         assert all(
             s > 0.0 for s in snr.values()
         ), "Each value in 'snr' needs to be positive"
     else:
         assert snr > 0.0, "'snr' needs to be positive"
-        snr = {k: snr for k in factor_scales.keys()}
+        snr = {k: snr for k in factor_scales_.keys()}
 
     if factor_sparsity is None:
         vs = {
@@ -107,7 +105,7 @@ def simulate(
 
     xs_truth = {
         k: scales[k] * vs[k[0]] @ diag(d) @ vs[k[1]].T
-        for k, d in factor_scales.items()
+        for k, d in factor_scales_.items()
     }
 
     xs = {

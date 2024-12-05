@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from numpy import (
     sum,
     abs,
@@ -7,20 +9,54 @@ from numpy import (
     argmin,
     diag,
     vstack,
+    float64,
+    intp,
+    bool_,
 )
+from numpy.typing import NDArray
 from numpy.linalg import svd
 from warnings import warn
+from dataclasses import dataclass, field
 
-from .base import Block, Context
+from .base import Block, Constraint, Context, ViewDesc, Entity
 
 
-class ZBlock(Block):
+@dataclass
+class SolrCMFBlocks:
+    z: dict[ViewDesc, ZBlock] = field(default_factory=dict)
+    d: dict[ViewDesc, DBlock] = field(default_factory=dict)
+    v: dict[Entity, VBlock] = field(default_factory=dict)
+    u: dict[Entity, UBlock] = field(default_factory=dict)
+    vp: dict[Entity, VpBlock] = field(default_factory=dict)
+
+
+@dataclass
+class SolrCMFConstraints:
+    factor: dict[Entity, FactorConstraint] = field(default_factory=dict)
+    mean_structure: dict[ViewDesc, MeanStructureConstraint] = field(
+        default_factory=dict
+    )
+
+
+@dataclass
+class SolrCMFParams:
+    rho: float
+    flat_indices: dict[ViewDesc, NDArray[intp]]
+    fixed_structure_pattern: bool
+    structure_pattern: dict[ViewDesc, NDArray[bool_]]
+    structure_penalty: float
+    structure_weights: dict[ViewDesc, NDArray[float64] | float]
+    factor_pruning: bool
+    max_rank: int
+
+
+class ZBlock(Block[SolrCMFBlocks, SolrCMFConstraints, ViewDesc]):
     def update(self, ctx: Context):
         self.value = (1.0 - 1.0 / (1.0 + ctx.params["rho"])) * (
-            ctx.blocks["v"][(self.idx[0],)].value
-            @ diag(ctx.blocks["d"][self.idx].value)
-            @ ctx.blocks["v"][(self.idx[1],)].value.T
-            - ctx.constraints["mean_structure"][self.idx].value
+            ctx.blocks.v[self.idx[0]].value
+            @ diag(ctx.blocks.d[self.idx].value)
+            @ ctx.blocks.v[self.idx[1]].value.T
+            - ctx.constraints.mean_structure[self.idx].value
         )
 
         self.value.flat[ctx.params["flat_indices"][self.idx]] += (
@@ -39,16 +75,16 @@ class ZBlock(Block):
         )
 
 
-class DBlock(Block):
+class DBlock(Block[SolrCMFBlocks, SolrCMFConstraints, ViewDesc]):
     def update(self, ctx: Context):
         tmp = diag(
-            ctx.blocks["v"][(self.idx[0],)].value.T
+            ctx.blocks.v[self.idx[0]].value.T
             @ (
                 (
-                    ctx.blocks["z"][self.idx].value
-                    + ctx.constraints["mean_structure"][self.idx].value
+                    ctx.blocks.z[self.idx].value
+                    + ctx.constraints.mean_structure[self.idx].value
                 )
-                @ ctx.blocks["v"][(self.idx[1],)].value
+                @ ctx.blocks.v[self.idx[1]].value
             )
         )
         if ctx.params["fixed_structure_pattern"]:
@@ -80,13 +116,13 @@ class DBlock(Block):
         ).sum()
 
 
-class VBlock(Block):
+class VBlock(Block[SolrCMFBlocks, SolrCMFConstraints, Entity]):
     def update(self, ctx: Context):
         if ctx.params["factor_pruning"]:
             active_factors = (
-                vstack(
-                    [d.active_factors for d in ctx.blocks["d"].values()]
-                ).sum(0)
+                vstack([d.active_factors for d in ctx.blocks.d.values()]).sum(
+                    0
+                )
                 != 0
             )
 
@@ -95,7 +131,7 @@ class VBlock(Block):
                 #     "Reducing dimension of integration problem to maximum"
                 #     f" rank {sum(active_factors)}"
                 # )
-                for d in ctx.blocks["d"].values():
+                for d in ctx.blocks.d.values():
                     d.value = d.value[active_factors]
                 if any(
                     not isinstance(s, float) and len(s) > 1
@@ -105,50 +141,52 @@ class VBlock(Block):
                         k: s[active_factors] if not isinstance(s, float) else s
                         for k, s in ctx.params["structure_weights"].items()
                     }
-                for k, v in ctx.blocks["v"].items():
+                for k, v in ctx.blocks.v.items():
                     v.value = v.value[:, active_factors]
                     if (
                         ctx.params["factor_sparsity"]
                         or ctx.params["fixed_factor_pattern"]
                     ):
-                        ctx.blocks["u"][k].value = ctx.blocks["u"][k].value[
+                        ctx.blocks.u[k].value = ctx.blocks.u[k].value[
                             :, active_factors
                         ]
-                        ctx.blocks["vp"][k].value = ctx.blocks["vp"][k].value[
+                        ctx.blocks.vp[k].value = ctx.blocks.vp[k].value[
                             :, active_factors
                         ]
-                        ctx.constraints["factor"][k].value = ctx.constraints[
-                            "factor"
-                        ][k].value[:, active_factors]
+                        ctx.constraints.factor[
+                            k
+                        ].value = ctx.constraints.factor[k].value[
+                            :, active_factors
+                        ]
 
                 ctx.params["max_rank"] = sum(active_factors)
 
         tmp = ctx.params["alpha"] / ctx.params["rho"] * self.value
         if ctx.params["factor_sparsity"] or ctx.params["fixed_factor_pattern"]:
             tmp += (
-                ctx.blocks["u"][self.idx].value
-                - ctx.blocks["vp"][self.idx].value
-                + ctx.constraints["factor"][self.idx].value
+                ctx.blocks.u[self.idx].value
+                - ctx.blocks.vp[self.idx].value
+                + ctx.constraints.factor[self.idx].value
             )
 
         for vidx, cidx in ctx.params["vidx_cidx"][self.idx]:
             tmp += (
                 (
-                    ctx.blocks["z"][vidx].value
-                    + ctx.constraints["mean_structure"][vidx].value
+                    ctx.blocks.z[vidx].value
+                    + ctx.constraints.mean_structure[vidx].value
                 )
-                @ ctx.blocks["v"][cidx].value
-                @ diag(ctx.blocks["d"][vidx].value)
+                @ ctx.blocks.v[cidx].value
+                @ diag(ctx.blocks.d[vidx].value)
             )
 
         for vidx, ridx in ctx.params["vidx_ridx"][self.idx]:
             tmp += (
                 (
-                    ctx.blocks["z"][vidx].value
-                    + ctx.constraints["mean_structure"][vidx].value
+                    ctx.blocks.z[vidx].value
+                    + ctx.constraints.mean_structure[vidx].value
                 ).T
-                @ ctx.blocks["v"][ridx].value
-                @ diag(ctx.blocks["d"][vidx].value)
+                @ ctx.blocks.v[ridx].value
+                @ diag(ctx.blocks.d[vidx].value)
             )
 
         u, _, vt = svd(tmp, full_matrices=False)
@@ -158,24 +196,24 @@ class VBlock(Block):
         return 0.0
 
 
-class UBlock(Block):
+class UBlock(Block[SolrCMFBlocks, SolrCMFConstraints, Entity]):
     def update(self, ctx: Context):
         m = (
-            ctx.blocks["v"][self.idx].value
-            + ctx.blocks["vp"][self.idx].value
-            - ctx.constraints["factor"][self.idx].value
+            ctx.blocks.v[self.idx].value
+            + ctx.blocks.vp[self.idx].value
+            - ctx.constraints.factor[self.idx].value
             + ctx.params["alpha"] / ctx.params["rho"] * self.value
         )
 
         if ctx.params["fixed_factor_pattern"]:
             # If 0-pattern is known
-            m *= ctx.params["factor_pattern"][self.idx[0]]
+            m *= ctx.params["factor_pattern"][self.idx]
         else:
             # Soft-thresholding
             m = sign(m) * maximum(
                 abs(m)
                 - ctx.params["factor_penalty"]
-                * ctx.params["factor_weights"][self.idx[0]]
+                * ctx.params["factor_weights"][self.idx]
                 / ctx.params["rho"],
                 0.0,
             )
@@ -189,7 +227,7 @@ class UBlock(Block):
                 tmp = (
                     -abs(m[:, i])
                     + ctx.params["factor_penalty"]
-                    * ctx.params["factor_weights"][self.idx[0]]
+                    * ctx.params["factor_weights"][self.idx]
                     / ctx.params["rho"]
                 )
                 idx = argmin(tmp)
@@ -207,23 +245,23 @@ class UBlock(Block):
 
         return (
             ctx.params["factor_penalty"]
-            * ctx.params["factor_weights"][self.idx[0]]
+            * ctx.params["factor_weights"][self.idx]
             * abs(self.value)
         ).sum()
 
 
-class VpBlock(Block):
+class VpBlock(Block[SolrCMFBlocks, SolrCMFConstraints, Entity]):
     def update(self, ctx: Context):
         self.value = (
             ctx.params["rho"]
             / (
                 ctx.params["rho"]
-                + ctx.params["mu"] * ctx.params["vp_weights"][self.idx[0]]
+                + ctx.params["mu"] * ctx.params["vp_weights"][self.idx]
             )
             * (
-                ctx.blocks["u"][self.idx].value
-                - ctx.blocks["v"][self.idx].value
-                + ctx.constraints["factor"][self.idx].value
+                ctx.blocks.u[self.idx].value
+                - ctx.blocks.v[self.idx].value
+                + ctx.constraints.factor[self.idx].value
             )
         )
 
@@ -231,6 +269,27 @@ class VpBlock(Block):
         return (
             0.5
             * ctx.params["mu"]
-            * ctx.params["vp_weights"][self.idx[0]]
+            * ctx.params["vp_weights"][self.idx]
             * (self.value**2).sum()
+        )
+
+
+class MeanStructureConstraint(
+    Constraint[SolrCMFBlocks, SolrCMFConstraints, ViewDesc]
+):
+    def constraint(self, ctx: Context) -> NDArray[float64]:
+        return (
+            ctx.blocks.z[self.idx].value
+            - ctx.blocks.v[self.idx[0]].value
+            @ diag(ctx.blocks.d[self.idx].value)
+            @ ctx.blocks.v[self.idx[1]].value.T
+        )
+
+
+class FactorConstraint(Constraint[SolrCMFBlocks, SolrCMFConstraints, Entity]):
+    def constraint(self, ctx: Context) -> NDArray[float64]:
+        return (
+            ctx.blocks.u[self.idx].value
+            - ctx.blocks.v[self.idx].value
+            - ctx.blocks.vp[self.idx].value
         )

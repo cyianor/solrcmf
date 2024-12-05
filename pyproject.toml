@@ -1,7 +1,7 @@
 [project]
 name = "solrcmf"
 description = "Tools for integrative analysis in flexible matrix layouts using penalized optimization techniques"
-version = "0.1.1"
+dynamic = ["version"]
 authors = [{ name = "Felix Held", email = "felix.held@gmail.com"}]
 readme = "README.md"
 requires-python = ">=3.10"
@@ -19,8 +19,12 @@ dependencies = [
 ]
 
 [project.urls]
+"Documentation" = "https://cyianor.github.io/solrcmf"
 "Source" = "https://github.com/cyianor/solrcmf"
 "Bug Tracker" = "https://github.com/cyianor/solrcmf/issues"
+
+[tool.hatch.version]
+path = "src/solrcmf/__about__.py"
 
 [project.optional-dependencies]
 docs = [
@@ -42,6 +46,13 @@ dependencies = [
     "build",
     "twine",
 ]
+
+[tool.hatch.envs.types]
+extra-dependencies = [
+  "mypy>=1.12.0",
+]
+[tool.hatch.envs.types.scripts]
+check = "mypy --install-types --non-interactive --ignore-missing-imports --check-untyped-defs src/solrcmf"
 
 [build-system]
 requires = ["hatchling"]

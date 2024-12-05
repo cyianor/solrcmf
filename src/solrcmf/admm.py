@@ -59,10 +59,10 @@ class ADMM(BaseEstimator, ABC):
         for i in range(self.max_iter):
             # Update variable blocks
             for name, idx in ctx.block_order:
-                ctx.blocks[name][idx].update(ctx)
+                getattr(ctx.blocks, name)[idx].update(ctx)
 
             # Update constraints
-            for cgroup in ctx.constraints.values():
+            for cgroup in ctx.constraints.__dict__.values():
                 for c in cgroup.values():
                     c.update(ctx)
 
@@ -109,9 +109,9 @@ def _objective(ctx: Context):
     val = 0.0
 
     for name, idx in ctx.block_order:
-        val += ctx.blocks[name][idx].objective(ctx)
+        val += getattr(ctx.blocks, name)[idx].objective(ctx)
 
-    for cgroup in ctx.constraints.values():
+    for cgroup in ctx.constraints.__dict__.values():
         for c in cgroup.values():
             val += c.objective(ctx)
 

@@ -13,19 +13,36 @@ from numpy import (
     zeros,
     ones,
 )
-from typing import Any
+from typing import Any, TypedDict
 from warnings import warn
 from sklearn.utils.validation import check_is_fitted, check_array
 from sklearn.utils._param_validation import Interval, StrOptions
 from numbers import Real, Integral
 from collections.abc import Hashable
 
-from .base import Context, ViewDesc
+from .base import Context, ViewDesc, Entity
 from .admm import ADMM
 from .initializer import RandomInitializer, FromFormerInitializer
-from .blocks import VBlock, DBlock, ZBlock, UBlock, VpBlock
-from .constraints import MeanStructureConstraint, FactorConstraint
+from .blocks import (
+    SolrCMFBlocks,
+    SolrCMFConstraints,
+    VBlock,
+    DBlock,
+    ZBlock,
+    UBlock,
+    VpBlock,
+    MeanStructureConstraint,
+    FactorConstraint,
+)
 from .metrics import neg_mean_squared_error
+
+
+class SolrCMFParams(TypedDict):
+    structure_penalty: float
+    structure_weights: dict[ViewDesc, NDArray[float64] | float]
+    fixed_structure_pattern: bool
+    max_rank: int
+    factor_penalty: float
 
 
 class SolrCMF(ADMM):
@@ -34,6 +51,10 @@ class SolrCMF(ADMM):
     Implements sparse orthogonal low-rank Collective Matrix Factorization
     (solrCMF).
     """
+
+    vs_: dict[Entity, NDArray[float64]]
+    ds_: dict[ViewDesc, NDArray[float64]]
+    us_: dict[Entity, NDArray[float64]]
 
     _parameter_constraints = {
         **ADMM._parameter_constraints,
@@ -91,15 +112,14 @@ class SolrCMF(ADMM):
             dict[ViewDesc, NDArray[float64] | float64] | None
         ) = None,
         structure_pattern: dict[ViewDesc, NDArray[bool_]] | None = None,
-        factor_weights: dict[Hashable, NDArray[float64] | float64]
-        | None = None,
-        factor_pattern: dict[Hashable, NDArray[bool_]] | None = None,
-        vs: dict[Hashable, NDArray[float64]] | None = None,
+        factor_weights: dict[Entity, NDArray[float64] | float64] | None = None,
+        factor_pattern: dict[Entity, NDArray[bool_]] | None = None,
+        vs: dict[Entity, NDArray[float64]] | None = None,
         ds: dict[ViewDesc, NDArray[float64]] | None = None,
-        us: dict[Hashable, NDArray[float64]] | None = None,
+        us: dict[Entity, NDArray[float64]] | None = None,
     ):
         # A context will be populated throughout setup
-        ctx = Context()
+        ctx = Context(SolrCMFBlocks(), SolrCMFConstraints())
 
         assert isinstance(
             X, dict
@@ -137,7 +157,7 @@ class SolrCMF(ADMM):
             " need to be None."
         )
 
-        if self.structure_penalty is not None:
+        if self.structure_penalty is not None and self.max_rank is not None:
             ctx.params["structure_penalty"] = self.structure_penalty
             max_rank = self.max_rank
 
@@ -149,8 +169,8 @@ class SolrCMF(ADMM):
 
             ctx.params["fixed_structure_pattern"] = False
         else:
-            assert (
-                not self.factor_pruning
+            assert not self.factor_pruning and isinstance(
+                structure_pattern, dict
             ), "Set 'factor_pruning' to False to use 'structure_pattern'"
             assert structure_pattern.keys() == X.keys(), (
                 "'structure_pattern' must contain one pattern for each data"
@@ -158,7 +178,7 @@ class SolrCMF(ADMM):
                 f" {structure_pattern.keys()}"
             )
 
-            rks = set(p.shape[0] for p in structure_pattern.values())
+            rks: set[int] = set(p.shape[0] for p in structure_pattern.values())
             assert len(rks) == 1, (
                 "All patterns in 'structure_pattern' should have the same"
                 f" length. Observed lengths: {rks}"
@@ -269,7 +289,9 @@ class SolrCMF(ADMM):
             f" {self.__class__.__name__}; now it is {rho}"
         )
 
-        if ctx.params["factor_sparsity"]:
+        if ctx.params["factor_sparsity"] and isinstance(
+            self.factor_penalty, float
+        ):
             u_edge_cases = {
                 k: self.factor_penalty * w * sqrt(viewdims[k]) / rho
                 for k, w in ctx.params["factor_weights"].items()
@@ -292,33 +314,31 @@ class SolrCMF(ADMM):
         ctx.params["factor_pruning"] = self.factor_pruning
 
         ctx.params["vidx_ridx"] = {
-            (v,): [(k, (k[0],)) for k in layout if k[1] == v] for v in views
+            v: [(k, k[0]) for k in layout if k[1] == v] for v in views
         }
         ctx.params["vidx_cidx"] = {
-            (v,): [(k, (k[1],)) for k in layout if k[0] == v] for v in views
+            v: [(k, k[1]) for k in layout if k[0] == v] for v in views
         }
 
         # Set up ADMM blocks and constraints
         for v in views:
-            ctx.add_block("v", (v,), VBlock, (viewdims[v], max_rank))
+            ctx.add_block("v", v, VBlock, (viewdims[v], max_rank))
         for k in layout:
             ctx.add_block("d", k, DBlock, (max_rank,))
 
             if self.factor_pruning:
-                ctx.blocks["d"][k].active_factors = ones(
-                    (max_rank,), dtype=bool_
-                )
+                ctx.blocks.d[k].active_factors = ones((max_rank,), dtype=bool_)
 
         if self.factor_penalty is not None or factor_pattern is not None:
             for v in views:
-                ctx.add_block("u", (v,), UBlock, (viewdims[v], max_rank))
+                ctx.add_block("u", v, UBlock, (viewdims[v], max_rank))
 
             # Important to keep vp blocks just before z blocks
             for v in views:
-                ctx.add_block("vp", (v,), VpBlock, (viewdims[v], max_rank))
+                ctx.add_block("vp", v, VpBlock, (viewdims[v], max_rank))
                 ctx.add_constraint(
                     "factor",
-                    (v,),
+                    v,
                     FactorConstraint,
                     (viewdims[v], max_rank),
                 )
@@ -418,14 +438,14 @@ class SolrCMF(ADMM):
         if hasattr(self, "us_"):
             return {k: u != 0.0 for k, u in self.us_.items()}
         else:
-            None
+            return None
 
     def _extra_attrs(self, ctx: Context):
         out = {}
-        out["vs_"] = {k[0]: b.value for k, b in ctx.blocks["v"].items()}
-        out["ds_"] = {k: b.value for k, b in ctx.blocks["d"].items()}
+        out["vs_"] = {k: b.value for k, b in ctx.blocks.v.items()}
+        out["ds_"] = {k: b.value for k, b in ctx.blocks.d.items()}
         if ctx.params["factor_sparsity"] or ctx.params["fixed_factor_pattern"]:
-            out["us_"] = {k[0]: b.value for k, b in ctx.blocks["u"].items()}
+            out["us_"] = {k: b.value for k, b in ctx.blocks.u.items()}
 
         out["est_max_rank_"] = sum(
             vstack([d != 0.0 for d in out["ds_"].values()]).sum(0) != 0
