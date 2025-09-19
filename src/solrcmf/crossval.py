@@ -1,44 +1,44 @@
-from numpy.typing import NDArray, ArrayLike
+from numbers import Integral, Real
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from typing import Any, Generator
+from warnings import warn
+
+from joblib import Parallel, delayed, dump, load
 from numpy import (
-    float64,
-    intp,
-    mean,
-    std,
-    vstack,
     argmax,
     argmin,
-    split,
-    flatnonzero,
-    atleast_1d,
-    ndim,
-    broadcast_arrays,
-    asarray,
-    inf,
-    reshape,
-    full,
-    sum,
-    nan,
     array,
+    asarray,
+    atleast_1d,
+    broadcast_arrays,
+    flatnonzero,
+    float64,
+    full,
+    inf,
+    intp,
+    mean,
+    nan,
+    ndim,
+    reshape,
+    split,
+    std,
+    sum,
+    vstack,
 )
 from numpy.random import default_rng
-from warnings import warn
-from joblib import delayed, Parallel, dump, load
-from tempfile import TemporaryDirectory
-from pathlib import Path
-from typing import Generator, Any
-
+from numpy.typing import ArrayLike, NDArray
 from sklearn.base import BaseEstimator, clone
 from sklearn.utils._param_validation import Interval, StrOptions
-from numbers import Real, Integral
 
-from .base import ViewDesc, Entity
-from .solrcmf import SolrCMF
-from .splits import BaseSplitter, ElementwiseFolds
+from .base import Entity, ViewDesc
 from .metrics import (
     neg_mean_squared_error,
     neg_sum_squared_error,
     weighted_neg_mean_squared_error,
 )
+from .solrcmf import SolrCMF
+from .splits import BaseSplitter, ElementwiseFolds
 
 InitsGeneratorType = Generator[
     tuple[

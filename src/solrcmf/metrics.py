@@ -1,5 +1,5 @@
+from numpy import float64, intp, isnan, logical_not, nansum, nanvar, sum
 from numpy.typing import NDArray
-from numpy import float64, intp, nansum, sum, isnan, logical_not, nanvar
 
 from .base import ViewDesc
 

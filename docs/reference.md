@@ -27,7 +27,7 @@
 ## Synthetic data generation
 
 ### simulate
-::: solrcmf.simulate
+::: solrcmf.simulate.simulate
 
 ## Auxillary methods
 

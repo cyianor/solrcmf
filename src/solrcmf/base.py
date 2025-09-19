@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from abc import ABCMeta, abstractmethod
-from numpy.typing import NDArray
+from typing import Generic, TypeVar
+
 from numpy import float64
-from typing import Any, TypeVar, Generic
+from numpy.typing import NDArray
 
 try:
     from typing import Unpack
@@ -16,18 +17,24 @@ ViewDesc = tuple[Entity, Entity, Unpack[tuple[Entity, ...]]]
 
 BlocksType = TypeVar("BlocksType")
 ConstraintsType = TypeVar("ConstraintsType")
+ParamsType = TypeVar("ParamsType")
 IndexType = TypeVar("IndexType")
 
 
-class Context[BlocksType, ConstraintsType]:
-    def __init__(self, blocks: BlocksType, constraints: ConstraintsType):
+class Context[BlocksType, ConstraintsType, ParamsType]:
+    def __init__(
+        self,
+        blocks: BlocksType,
+        constraints: ConstraintsType,
+        params: ParamsType,
+    ):
         self.blocks = blocks
         self.constraints = constraints
+        self.params = params
         self.data: dict[
             ViewDesc,
             NDArray[float64],
         ] = {}
-        self.params: dict[str, Any] = {}
         self.block_order: list[tuple[str, BlockDesc]] = []
 
     def add_block(
@@ -72,29 +79,32 @@ class Block(Generic[ContextType, IndexType], metaclass=ABCMeta):
 
     @abstractmethod
     def update(self, ctx: ContextType):
+        """Update the block variables."""
         pass
 
     @abstractmethod
     def objective(self, ctx: ContextType) -> float:
+        """Compute the contribution to the objective."""
         return 0.0
 
 
 class Constraint(Block[ContextType, IndexType], metaclass=ABCMeta):
-    """Base class for (multi-)affine constraints"""
+    """Base class for (multi-)affine constraints."""
 
     @abstractmethod
     def constraint(self, ctx: ContextType) -> NDArray[float64]:
-        """Returns the lhs of a constraint f(x) = 0"""
+        """Return the lhs of a constraint f(x) = 0."""
         pass
 
     def update(self, ctx: ContextType):
-        """Update the multipliers"""
+        """Update the multipliers."""
         self.value += self.constraint(ctx)
 
     def objective(self, ctx: ContextType) -> float:
+        """Compute the contribution to the objective."""
         return (
             0.5
-            * ctx.params["rho"]
+            * ctx.params.rho
             * (
                 ((self.constraint(ctx) + self.value) ** 2).sum()
                 - (self.value**2).sum()

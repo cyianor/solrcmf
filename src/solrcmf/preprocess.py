@@ -1,21 +1,26 @@
-from numpy import (
-    mean,
-    isnan,
-    logical_not,
-    float64,
-    sum,
-    flatnonzero,
-    array,
-    full,
-    floating,
-    nan,
-    divide,
-)
-from numpy.typing import NDArray
+"""Functions to preprocess data.
+
+This module contains functions that can be used to preprocess the data.
+"""
+
 from numbers import Integral
 from typing import Any
-from sklearn.utils.validation import check_array
 from warnings import warn
+
+from numpy import (
+    array,
+    divide,
+    flatnonzero,
+    floating,
+    full,
+    isnan,
+    logical_not,
+    mean,
+    nan,
+    sum,
+)
+from numpy.typing import NDArray
+from sklearn.utils.validation import check_array
 
 
 def _residual(
@@ -47,37 +52,41 @@ def _residual(
     )
 
 
-def bicenter(X: NDArray[float64], tol: float = 1e-16, max_iter: int = 10):
+def bicenter(
+    X: NDArray[floating[Any]], tol: float = 1e-16, max_iter: int = 10
+) -> tuple[
+    NDArray[floating[Any]],
+    floating[Any],
+    NDArray[floating[Any]],
+    NDArray[floating[Any]],
+]:
     """Bicenter the input matrix allowing for missing values.
 
-    Computes a total mean as well as row and column means.
+    Instead of simply centering all elements around a total mean value, this
+    function models the data as `X = m + rm + cm + Y`, where m is the total
+    mean (shape ()), rm are row means (shape (n, 1)), cm are column means
+    (shape (1, m)), and Y are residuals (shape (n, m)).
 
     Implements the centering algorithm described in
+    > Hastie et al. (2015) Matrix completion and low-rank SVD via fast
+    > alternating least squares. Journal of Machine Learning Research,
+    > 16(104):3367--3402, 2015.
 
-    Hastie et al. (2015) Matrix completion and low-rank SVD via fast
-    alternating least squares. Journal of Machine Learning Research,
-    16(104):3367--3402, 2015.
+    Args:
+        X: The input matrix
+        tol: Convergence tolerance
+        max_iter: Maximum number of iterations to perform.
 
-    Parameters
-    ----------
-    X : ndarray
-        The input matrix
-    tol : float
-        Convergence tolerance
-    max_iter : int
-        Maximum number of iterations to perform.
+    Returns:
+        A tuple (Y, m, rm, cm) containing the bi-centered matrix Y, the
+            overall mean m, as well as row-means rm and column-means cm.
 
-    Returns
-    -------
-    (Y, m, rm, cm) : (ndarray, float, ndarray, ndarray)
-        Returns the bi-centered matrix, the overall mean, as well as
-        row-means and column-means.
     """
     X = check_array(X, force_all_finite="allow-nan")
-    assert tol > 0, "'tol' needs to be positive"
-    assert (
-        isinstance(max_iter, Integral) and max_iter > 0
-    ), "'max_iter' needs to be a positive integer"
+    assert tol > 0, f"{tol=} needs to be positive"
+    assert isinstance(max_iter, Integral) and max_iter > 0, (
+        f"{max_iter=} needs to be a positive integer"
+    )
 
     n, p = X.shape
 
@@ -152,7 +161,22 @@ def bicenter(X: NDArray[float64], tol: float = 1e-16, max_iter: int = 10):
     return Y, total_mean, row_means, col_means
 
 
-def nanscale(X: NDArray[floating[Any]], scale: float):
+def nanscale(
+    X: NDArray[floating[Any]], scale: float
+) -> NDArray[floating[Any]]:
+    """Scale all non-nan values in an array.
+
+    Args:
+        X: Input array to be scaled, possibly containing numpy.nan values.
+        scale: Positive scale parameter.
+
+    Returns:
+        A scaled version of the input array.
+
+    """
+    X = check_array(X, force_all_finite="allow-nan")
+    assert scale > 0.0, f"{scale=} is required to be positive"
+
     Y = full(X.shape, nan, dtype=X.dtype)
     divide(
         X,

@@ -1,19 +1,20 @@
-from sklearn.base import BaseEstimator
-from sklearn.utils.validation import check_array, check_random_state
-from sklearn.utils._param_validation import Interval, StrOptions
-from numbers import Real, Integral
-from numpy.random import RandomState
+from numbers import Integral, Real
+
 from numpy import (
-    nansum,
-    isnan,
-    flatnonzero,
+    asarray,
     diagonal,
     fill_diagonal,
+    flatnonzero,
     float32,
     float64,
-    asarray,
+    isnan,
+    nansum,
 )
 from numpy.linalg import solve
+from numpy.random import RandomState
+from sklearn.base import BaseEstimator
+from sklearn.utils._param_validation import Interval, StrOptions
+from sklearn.utils.validation import check_array, check_random_state
 
 
 class LowRankImputation(BaseEstimator):
@@ -135,7 +136,7 @@ def _initialize(max_rank, init, random_state, X, U, V):
 
 def _compute_loss(X, U, V, penalty) -> float:
     return 0.5 * (
-        nansum(((X - U @ V.T)) ** 2)
+        nansum((X - U @ V.T) ** 2)
         + penalty * (U**2).sum()
         + penalty * (V**2).sum()
     )

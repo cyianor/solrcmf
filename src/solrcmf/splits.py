@@ -1,18 +1,19 @@
-from numpy.typing import NDArray
+from abc import ABCMeta, abstractmethod
+
 from numpy import (
-    float64,
-    int_,
-    bool_,
-    zeros,
     arange,
+    bool_,
     flatnonzero,
+    float64,
+    full,
+    int_,
+    isnan,
     logical_not,
     logical_or,
-    isnan,
-    full,
+    zeros,
 )
 from numpy.random import Generator, default_rng
-from abc import ABCMeta, abstractmethod
+from numpy.typing import NDArray
 
 from .base import ViewDesc
 

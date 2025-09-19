@@ -1,17 +1,19 @@
 from abc import ABC, abstractmethod
-from numpy import inf
+from dataclasses import fields
+from numbers import Integral, Real
 from time import process_time
+from typing import Any
+
+from numpy import inf
 from sklearn.base import BaseEstimator
 from sklearn.utils._param_validation import Interval
-from numbers import Real, Integral
-from typing import Any, Generic, TypeVar
 
-from .base import Context
-
-ContextType = TypeVar("ContextType", bound=Context)
+from .base import Block, BlockDesc, Constraint, Context
 
 
-class ADMM(Generic[ContextType], BaseEstimator, ABC):
+class ADMM(BaseEstimator, ABC):
+    """Base class for ADMM algorithms."""
+
     _parameter_constraints = {
         "max_iter": [Interval(Integral, 1, None, closed="left")],
         "abs_tol": [Interval(Real, 0, None, closed="neither")],
@@ -27,6 +29,16 @@ class ADMM(Generic[ContextType], BaseEstimator, ABC):
         *,
         save_ctx: bool = False,
     ):
+        """Initialize a new instance of the ADMM algorithm.
+
+        Args:
+            max_iter: Maximum number of iterations
+            abs_tol: Absolute convergence tolerance
+            rel_tol: Relative convergence tolerance
+            save_ctx: Whether or not context object should be saved upon
+                      convergence.
+
+        """
         self.max_iter = max_iter
         self.abs_tol = abs_tol
         self.rel_tol = rel_tol
@@ -34,8 +46,8 @@ class ADMM(Generic[ContextType], BaseEstimator, ABC):
         self.save_ctx = save_ctx
 
     @abstractmethod
-    def _setup(self, X, **kwargs) -> ContextType:
-        """Setup the estimation problem.
+    def _setup(self, X, **kwargs) -> Context:
+        """Set up the estimation problem.
 
         Called after data is available.
         """
@@ -43,7 +55,7 @@ class ADMM(Generic[ContextType], BaseEstimator, ABC):
             f"_setup method on {self.__class__.__name__} not implemented"
         )
 
-    # Type-checking
+    # Type-stub
     def _validate_params(self) -> None: ...
 
     def fit(self, X, y=None, **kwargs):
@@ -64,10 +76,16 @@ class ADMM(Generic[ContextType], BaseEstimator, ABC):
         for i in range(self.max_iter):
             # Update variable blocks
             for name, idx in ctx.block_order:
-                getattr(ctx.blocks, name)[idx].update(ctx)
+                bgroup: dict[BlockDesc, Block[Context, Any]] = getattr(
+                    ctx.blocks, name
+                )
+                bgroup[idx].update(ctx)
 
             # Update constraints
-            for cgroup in ctx.constraints.__dict__.values():
+            for cnstrnt in fields(ctx.constraints):
+                cgroup: dict[BlockDesc, Constraint[Context, Any]] = getattr(
+                    ctx.constraints, cnstrnt.name
+                )
                 for c in cgroup.values():
                     c.update(ctx)
 
@@ -106,17 +124,23 @@ class ADMM(Generic[ContextType], BaseEstimator, ABC):
     def transform(self, X, y=None, **kwargs):
         pass
 
-    def _extra_attrs(self, ctx: ContextType) -> dict[str, Any]:
+    def _extra_attrs(self, ctx: Context) -> dict[str, Any]:
         return {}
 
 
-def _objective[B, C](ctx: Context[B, C]) -> float:
+def _objective(ctx: Context) -> float:
     val = 0.0
 
     for name, idx in ctx.block_order:
-        val += getattr(ctx.blocks, name)[idx].objective(ctx)
+        bgroup: dict[BlockDesc, Block[Context, Any]] = getattr(
+            ctx.blocks, name
+        )
+        val += bgroup[idx].objective(ctx)
 
-    for cgroup in ctx.constraints.__dict__.values():
+    for cnstrnt in fields(ctx.constraints):
+        cgroup: dict[BlockDesc, Constraint[Context, Any]] = getattr(
+            ctx.constraints, cnstrnt.name
+        )
         for c in cgroup.values():
             val += c.objective(ctx)
 

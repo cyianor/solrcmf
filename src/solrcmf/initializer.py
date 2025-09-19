@@ -4,7 +4,7 @@ from numpy.random import Generator, default_rng
 from numpy.typing import NDArray
 
 from .base import Context, ViewDesc, Entity
-from .blocks import SolrCMFBlocks, SolrCMFConstraints
+from .blocks import SolrCMFBlocks, SolrCMFConstraints, SolrCMFParams
 
 
 class RandomInitializer:
@@ -14,17 +14,16 @@ class RandomInitializer:
 
         self.rng = rng
 
-    def __call__(self, ctx: Context[SolrCMFBlocks, SolrCMFConstraints]):
+    def __call__(
+        self, ctx: Context[SolrCMFBlocks, SolrCMFConstraints, SolrCMFParams]
+    ):
         for v in ctx.blocks.v.keys():
             ctx.blocks.v[v].value = qr(
                 self.rng.standard_normal(ctx.blocks.v[v].shape)
             ).Q
             ctx.blocks.v[v].initialized = True
 
-            if (
-                ctx.params["factor_sparsity"]
-                or ctx.params["fixed_factor_pattern"]
-            ):
+            if ctx.params.factor_sparsity or ctx.params.fixed_factor_pattern:
                 ctx.blocks.u[v].value = ctx.blocks.v[v].value.copy()
                 ctx.blocks.u[v].initialized = True
 
@@ -80,29 +79,34 @@ class FromFormerInitializer:
         self.us = us
         self.reduce_max_rank = reduce_max_rank
 
-    def __call__(self, ctx: Context[SolrCMFBlocks, SolrCMFConstraints]):
+    def __call__(
+        self, ctx: Context[SolrCMFBlocks, SolrCMFConstraints, SolrCMFParams]
+    ):
         if self.reduce_max_rank:
-            if "structure_pattern" in ctx.params:
-                structure_pattern = ctx.params["structure_pattern"]
+            if ctx.params.fixed_factor_pattern:
+                # if "structure_pattern" in ctx.params:
+                structure_pattern = ctx.params.structure_pattern
             else:
                 structure_pattern = {k: d != 0.0 for k, d in self.ds.items()}
 
             active_factors = flatnonzero(
                 vstack(
                     [structure_pattern[k] for k in structure_pattern.keys()]
-                ).sum(0)
+                ).sum(axis=0)
                 != 0
             )
 
-            if "structure_pattern" in ctx.params:
-                ctx.params["structure_pattern"] = {
+            if ctx.params.fixed_factor_pattern:
+                # if "structure_pattern" in ctx.params:
+                ctx.params.structure_pattern = {
                     k: p[active_factors]
-                    for k, p in ctx.params["structure_pattern"].items()
+                    for k, p in ctx.params.structure_pattern.items()
                 }
-            if "factor_pattern" in ctx.params:
-                ctx.params["factor_pattern"] = {
+            if ctx.params.fixed_structure_pattern:
+                # if "factor_pattern" in ctx.params:
+                ctx.params.factor_pattern = {
                     v: p[:, active_factors]
-                    for v, p in ctx.params["factor_pattern"].items()
+                    for v, p in ctx.params.factor_pattern.items()
                 }
         else:
             active_factors = s_[:]
@@ -112,10 +116,7 @@ class FromFormerInitializer:
             ctx.blocks.v[v].shape = ctx.blocks.v[v].value.shape
             ctx.blocks.v[v].initialized = True
 
-            if (
-                ctx.params["factor_sparsity"]
-                or ctx.params["fixed_factor_pattern"]
-            ):
+            if ctx.params.factor_sparsity or ctx.params.fixed_factor_pattern:
                 if self.us is not None:
                     ctx.blocks.u[v].value = self.us[v][
                         :, active_factors

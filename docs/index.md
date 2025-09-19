@@ -31,9 +31,10 @@ repeated observations of the same row/column view combination.
 Data integration is however only performed for row and column entities.
 ///
 
-solrCMF uses the type alias `ViewDesc`, short for *view description*, to
-describe view relationships. A `ViewDesc` is simply a tuple of two or more
-hashable types.
+A single view is associated with type `Entity`, which is either a `str`
+or `int`. solrCMF then uses the type alias `ViewDesc`, short for
+*view description*, to describe view relationships. A `ViewDesc` is simply
+a tuple of two or more entries of type `Entity`.
 
 /// details | Examples of view relationships
     type: example
@@ -54,7 +55,7 @@ Integers can be used as convenient short-hands for views.
 Strings can provide additional descriptions to the views.
 ////
 
-//// tab | Additional
+//// tab | Advanced
 ```python
 ("x", "y", "channel"), (0, 1, "a", "01:12"), (0, 1, "a", "10:50")
 ```
@@ -64,7 +65,7 @@ of a view relationship.
 ///
 
 /// warning | Important
-Any hashable data types can be used to represent views. The only importance is
+Strings and integers can be used to represent views. Is is important
 that every appearance of view `0`, say, represents the same view, no matter at
 which position in the `ViewDesc` tuple it appears. For example, in `(0, 1)` and
 `(5, 0)` the `0` represents the same view within a data layout.
@@ -81,14 +82,15 @@ Python list containing entries of type `ViewDesc`.
     type: example
 A simple multi-view layout can be described as
 ```python
-layout = [
+layout: list[ViewDesc] = [
     ("user", "datatype1"),
     ("user", "datatype2"),
-    ("user", "datatype3"),
-    ("user", "datatype4"),
+    ("user", "datatype3", "layer1"),
+    ("user", "datatype3", "layer2"),
 ]
 ```
 ///
 
-Defining a layout indirectly also defines the views present in a collection of
-data sources and establishes relationships between them.
+Defining a layout establishes relationships between views and indirectly also
+defines which views are present in a collection of
+data sources.

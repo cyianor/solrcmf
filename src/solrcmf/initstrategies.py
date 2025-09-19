@@ -1,10 +1,18 @@
-from numpy.typing import NDArray
-from numpy import float64, hstack, vstack, diag, inf
+"""Functions to compute initial decompositions.
+
+This module provides functions that compute initial decompositions. These
+are either built around a heuristic that provides a valid but possibly
+suboptimal solution or use the SolrCMF algorithm to compute rough initial
+decompositions starting from random initial decompositions.
+"""
+
+from joblib import Parallel, delayed
+from numpy import diag, float64, hstack, inf, vstack
 from numpy.linalg import svd
 from numpy.random import Generator, default_rng
-from joblib import Parallel, delayed
+from numpy.typing import NDArray
 
-from .base import ViewDesc, Entity
+from .base import Entity, ViewDesc
 from .solrcmf import SolrCMF
 
 
@@ -12,6 +20,17 @@ def multiview_init(
     xs: dict[ViewDesc, NDArray[float64]],
     max_rank: int,
 ) -> tuple[dict[Entity, NDArray[float64]], dict[ViewDesc, NDArray[float64]]]:
+    """Compute a decomposition using the SVD of the concatenated matrices.
+
+    Args:
+        xs: Input data
+        max_rank: Maximum rank of the decomposition
+
+    Returns:
+        A tuple (vs, ds) containing the factor matrices in vs and the
+        singular values in ds.
+
+    """
     layout = list(xs.keys())
     if len({k[0] for k in layout}) == 1:
         x_joint = hstack([x for x in xs.values()]).T
@@ -47,27 +66,22 @@ def best_random_init(
     rng: Generator | int | None = None,
     **kwargs,
 ) -> SolrCMF:
-    """Generate best unpenalized solution from random starting points
+    """Generate best unpenalized solution from random starting points.
 
-    Parameters
-    ----------
-    xs
-        Input data
-    max_rank
-        Maximum rank
-    n_inits
-        Number of random starting points to test
-    n_jobs
-        Number of jobs to run concurrently, use as in [joblib.Parallel](https://joblib.readthedocs.io/en/stable/generated/joblib.Parallel.html#joblib.Parallel)
-    rng
-        Random number generator ([numpy.random.Generator](https://numpy.org/doc/stable/reference/random/generator.html)), random seed, or `None`
-        to choose the default random number generator.
+    Args:
+        xs: Input data
+        max_rank: Maximum rank
+        n_inits: Number of random starting points to test
+        n_jobs: Number of jobs to run concurrently, use as in [joblib.Parallel](https://joblib.readthedocs.io/en/stable/generated/joblib.Parallel.html#joblib.Parallel)
+        rng: Random number generator ([numpy.random.Generator](https://numpy.org/doc/stable/reference/random/generator.html)),
+            random seed, or `None` to choose the default random number
+            generator.
+        **kwargs: Additional arguments passed to the SolrCMF estimator.
 
-    Returns
-    -------
-    fit : SolrCMF
-        The solution found with minimal objective value among all solutions
-        obtained from the `n_inits` random starting points.
+    Returns:
+        fit (SolrCMF): The solution found with minimal objective value among
+            all solutions obtained from the `n_inits` random starting points.
+
     """
     assert n_inits > 0, "'n_init' needs to be a positive integer"
 
@@ -87,9 +101,9 @@ def best_random_init(
 
     rng_inits = rng.spawn(n_inits)
 
-    ests_init: list[SolrCMF] = Parallel(n_jobs=n_jobs)(
+    ests_init: list[SolrCMF] = Parallel(n_jobs=n_jobs, return_as="list")(
         delayed(init_run)(xs, ri) for ri in rng_inits
-    )
+    )  # type: ignore
 
     best_obj = inf
 

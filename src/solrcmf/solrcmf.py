@@ -1,53 +1,45 @@
-from numpy.typing import NDArray
+from numbers import Integral, Real
+from typing import Any
+from warnings import warn
+
 from numpy import (
-    float64,
     bool_,
     diag,
+    flatnonzero,
+    float64,
     intp,
     isnan,
-    flatnonzero,
-    logical_not,
     logical_and,
-    vstack,
-    sqrt,
-    zeros,
+    logical_not,
     ones,
+    sqrt,
+    vstack,
+    zeros,
 )
-from typing import Any, TypedDict
-from warnings import warn
-from sklearn.utils.validation import check_is_fitted, check_array
+from numpy.typing import NDArray
 from sklearn.utils._param_validation import Interval, StrOptions
-from numbers import Real, Integral
+from sklearn.utils.validation import check_array, check_is_fitted
 
-from .base import Context, ViewDesc, Entity
 from .admm import ADMM
-from .initializer import RandomInitializer, FromFormerInitializer
+from .base import Context, Entity, ViewDesc
 from .blocks import (
+    DBlock,
+    FactorConstraint,
+    MeanStructureConstraint,
     SolrCMFBlocks,
     SolrCMFConstraints,
-    VBlock,
-    DBlock,
-    ZBlock,
+    SolrCMFParams,
     UBlock,
+    VBlock,
     VpBlock,
-    MeanStructureConstraint,
-    FactorConstraint,
+    ZBlock,
 )
+from .initializer import FromFormerInitializer, RandomInitializer
 from .metrics import neg_mean_squared_error
 
-ContextType = Context[SolrCMFBlocks, SolrCMFConstraints]
 
-
-class SolrCMFParams(TypedDict):
-    structure_penalty: float
-    structure_weights: dict[ViewDesc, NDArray[float64] | float]
-    fixed_structure_pattern: bool
-    max_rank: int
-    factor_penalty: float
-
-
-class SolrCMF(ADMM[ContextType]):
-    """Sparse orthgonal low-rank Collective Matrix Factorization
+class SolrCMF(ADMM):
+    """Sparse orthgonal low-rank Collective Matrix Factorization.
 
     Implements sparse orthogonal low-rank Collective Matrix Factorization
     (solrCMF).
@@ -121,11 +113,11 @@ class SolrCMF(ADMM[ContextType]):
         us: dict[Entity, NDArray[float64]] | None = None,
     ):
         # A context will be populated throughout setup
-        ctx = Context(SolrCMFBlocks(), SolrCMFConstraints())
+        ctx = Context(SolrCMFBlocks(), SolrCMFConstraints(), SolrCMFParams())
 
-        assert isinstance(
-            X, dict
-        ), "'X' needs to be a dictionary of data matrices"
+        assert isinstance(X, dict), (
+            "'X' needs to be a dictionary of data matrices"
+        )
 
         for x in X.values():
             x = check_array(x, force_all_finite="allow-nan")
@@ -160,16 +152,18 @@ class SolrCMF(ADMM[ContextType]):
         )
 
         if self.structure_penalty is not None and self.max_rank is not None:
-            ctx.params["structure_penalty"] = self.structure_penalty
+            ctx.params.structure_penalty = self.structure_penalty
             max_rank = self.max_rank
 
             if structure_weights is None:
-                ctx.params["structure_weights"] = {k: 1.0 for k in layout}
+                ctx.params.structure_weights = {
+                    k: float64(1.0) for k in layout
+                }
             else:
                 # TODO: Add argument check
-                ctx.params["structure_weights"] = structure_weights
+                ctx.params.structure_weights = structure_weights
 
-            ctx.params["fixed_structure_pattern"] = False
+            ctx.params.fixed_structure_pattern = False
         else:
             assert not self.factor_pruning and isinstance(
                 structure_pattern, dict
@@ -188,10 +182,10 @@ class SolrCMF(ADMM[ContextType]):
             # Extract the only element
             max_rank = list(rks)[0]
 
-            ctx.params["structure_pattern"] = structure_pattern
-            ctx.params["fixed_structure_pattern"] = True
+            ctx.params.structure_pattern = structure_pattern
+            ctx.params.fixed_structure_pattern = True
 
-        ctx.params["max_rank"] = max_rank
+        ctx.params.max_rank = max_rank
 
         for v, p in viewdims.items():
             assert p >= max_rank, (
@@ -201,44 +195,44 @@ class SolrCMF(ADMM[ContextType]):
 
         if self.factor_penalty is not None:
             if self.mu is None:
-                ctx.params["mu"] = 10.0
+                ctx.params.mu = 10.0
             else:
-                ctx.params["mu"] = self.mu
+                ctx.params.mu = self.mu
 
             # assert self.mu is not None, (
             #     f"mu needs to be provided in {self.__class__.__name__} when"
             #     " factor_penalty is not None"
             # )
-            # ctx.params["mu"] = self.mu
+            # ctx.params.mu = self.mu
 
-            ctx.params["factor_penalty"] = self.factor_penalty
-            ctx.params["factor_sparsity"] = True
+            ctx.params.factor_penalty = self.factor_penalty
+            ctx.params.factor_sparsity = True
 
             if factor_weights is None:
-                ctx.params["factor_weights"] = {
+                ctx.params.factor_weights = {
                     k: 1.0 / sqrt(p) for k, p in viewdims.items()
                 }
             else:
                 # TODO: Add argument check
-                ctx.params["factor_weights"] = factor_weights
+                ctx.params.factor_weights = factor_weights
         else:
-            ctx.params["factor_sparsity"] = False
+            ctx.params.factor_sparsity = False
 
         if factor_pattern is not None:
-            assert (
-                not self.factor_pruning
-            ), "Set 'factor_pruning' to False to use 'factor_pattern'"
+            assert not self.factor_pruning, (
+                "Set 'factor_pruning' to False to use 'factor_pattern'"
+            )
 
             if self.mu is None:
-                ctx.params["mu"] = 10.0
+                ctx.params.mu = 10.0
             else:
-                ctx.params["mu"] = self.mu
+                ctx.params.mu = self.mu
 
             # assert self.mu is not None, (
             #     f"mu needs to be provided in {self.__class__.__name__} when"
             #     " factor_pattern is not None"
             # )
-            # ctx.params["mu"] = self.mu
+            # ctx.params.mu = self.mu
 
             # Check factor pattern's correctness
             assert factor_pattern.keys() == viewdims.keys(), (
@@ -265,19 +259,19 @@ class SolrCMF(ADMM[ContextType]):
                 f" {rk}"
             )
 
-            ctx.params["factor_pattern"] = factor_pattern
-            ctx.params["fixed_factor_pattern"] = True
+            ctx.params.factor_pattern = factor_pattern
+            ctx.params.fixed_factor_pattern = True
         else:
-            ctx.params["fixed_factor_pattern"] = False
+            ctx.params.fixed_factor_pattern = False
 
-        if ctx.params["factor_sparsity"] or ctx.params["fixed_factor_pattern"]:
-            ctx.params["vp_weights"] = {
+        if ctx.params.factor_sparsity or ctx.params.fixed_factor_pattern:
+            ctx.params.vp_weights = {
                 k: 1.0 / sqrt(p) for k, p in viewdims.items()
             }
-            max_vp_w = max([w for w in ctx.params["vp_weights"].values()])
-            min_vp_w = min([w for w in ctx.params["vp_weights"].values()])
+            max_vp_w = max([w for w in ctx.params.vp_weights.values()])
+            min_vp_w = min([w for w in ctx.params.vp_weights.values()])
 
-            rho_lb = _rho_lower_bound(ctx.params["mu"], min_vp_w, max_vp_w)
+            rho_lb = _rho_lower_bound(ctx.params.mu, min_vp_w, max_vp_w)
         else:
             rho_lb = _rho_lower_bound()
 
@@ -291,12 +285,12 @@ class SolrCMF(ADMM[ContextType]):
             f" {self.__class__.__name__}; now it is {rho}"
         )
 
-        if ctx.params["factor_sparsity"] and isinstance(
+        if ctx.params.factor_sparsity and isinstance(
             self.factor_penalty, float
         ):
             u_edge_cases = {
                 k: self.factor_penalty * w * sqrt(viewdims[k]) / rho
-                for k, w in ctx.params["factor_weights"].items()
+                for k, w in ctx.params.factor_weights.items()
             }
             if any([u >= 1 for u in u_edge_cases.values()]):
                 warn(
@@ -305,20 +299,20 @@ class SolrCMF(ADMM[ContextType]):
                     f" Here: {u_edge_cases}"
                 )
 
-        ctx.params["rho"] = rho
+        ctx.params.rho = rho
         if self.alpha is None:
-            ctx.params["alpha"] = 1e-3 * ctx.params["rho"]
+            ctx.params.alpha = 1e-3 * ctx.params.rho
         else:
-            ctx.params["alpha"] = self.alpha
+            ctx.params.alpha = self.alpha
 
         # print(f"alpha = {ctx.params['alpha']}")
 
-        ctx.params["factor_pruning"] = self.factor_pruning
+        ctx.params.factor_pruning = self.factor_pruning
 
-        ctx.params["vidx_ridx"] = {
+        ctx.params.vidx_ridx = {
             v: [(k, k[0]) for k in layout if k[1] == v] for v in views
         }
-        ctx.params["vidx_cidx"] = {
+        ctx.params.vidx_cidx = {
             v: [(k, k[1]) for k in layout if k[0] == v] for v in views
         }
 
@@ -369,10 +363,7 @@ class SolrCMF(ADMM[ContextType]):
                 " 'vs' and 'ds' need to be provided to method 'fit' as"
                 " keyword arguments."
             )
-            if (
-                ctx.params["factor_sparsity"]
-                or ctx.params["fixed_factor_pattern"]
-            ):
+            if ctx.params.factor_sparsity or ctx.params.fixed_factor_pattern:
                 assert us is not None, (
                     "If 'init' is \"custom\" in"
                     f" {self.__class__.__name__} then 'us' needs to be"
@@ -391,17 +382,15 @@ class SolrCMF(ADMM[ContextType]):
 
         # Remove nan entries from `flat_indices` if indices provided.
         # Otherwise have non-nan indices as `flat_indices`
-        ctx.params["flat_indices"] = {}
+        # ctx.params.flat_indices = {}
         for k, x in ctx.data.items():
             if indices is None:
-                ctx.params["flat_indices"][k] = flatnonzero(
-                    logical_not(isnan(x))
-                )
+                ctx.params.flat_indices[k] = flatnonzero(logical_not(isnan(x)))
             else:
                 indices_mask = zeros(x.size, dtype=bool_)
                 indices_mask[indices[k]] = True
                 not_nan_mask = logical_not(isnan(x)).ravel()
-                ctx.params["flat_indices"][k] = flatnonzero(
+                ctx.params.flat_indices[k] = flatnonzero(
                     logical_and(indices_mask, not_nan_mask)
                 )
 
@@ -442,11 +431,13 @@ class SolrCMF(ADMM[ContextType]):
         else:
             return None
 
-    def _extra_attrs(self, ctx: Context):
+    def _extra_attrs(
+        self, ctx: Context[SolrCMFBlocks, SolrCMFConstraints, SolrCMFParams]
+    ):
         out = {}
         out["vs_"] = {k: b.value for k, b in ctx.blocks.v.items()}
         out["ds_"] = {k: b.value for k, b in ctx.blocks.d.items()}
-        if ctx.params["factor_sparsity"] or ctx.params["fixed_factor_pattern"]:
+        if ctx.params.factor_sparsity or ctx.params.fixed_factor_pattern:
             out["us_"] = {k: b.value for k, b in ctx.blocks.u.items()}
 
         out["est_max_rank_"] = sum(
