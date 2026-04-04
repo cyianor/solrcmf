@@ -8,11 +8,21 @@ from numpy import inf
 from sklearn.base import BaseEstimator
 from sklearn.utils._param_validation import Interval
 
-from .base import Block, BlockDesc, Constraint, Context, DataclassInstance
+from .base import (
+    Block,
+    BlockDesc,
+    Constraint,
+    Context,
+    DataclassInstance,
+    objective,
+    update,
+)
 
 
 class ADMM[
-    BT: DataclassInstance, CT: DataclassInstance, PT: DataclassInstance
+    BT: DataclassInstance,
+    CT: DataclassInstance,
+    PT: DataclassInstance,
 ](BaseEstimator, ABC):
     """Base class for ADMM algorithms."""
 
@@ -76,13 +86,13 @@ class ADMM[
             # Update variable blocks
             for name, idx in ctx.block_order:
                 bgroup = getattr(ctx.blocks, name)
-                bgroup[idx].update(ctx)
+                update(bgroup[idx], ctx)
 
             # Update constraints
             for cnstrnt in fields(ctx.constraints):
                 cgroup = getattr(ctx.constraints, cnstrnt.name)
                 for c in cgroup.values():
-                    c.update(ctx)
+                    update(c, ctx)
 
             obj = _objective(ctx)
             gap = obj_old - obj
@@ -128,7 +138,9 @@ class ADMM[
 
 
 def _objective[
-    BT: DataclassInstance, CT: DataclassInstance, PT: DataclassInstance
+    BT: DataclassInstance,
+    CT: DataclassInstance,
+    PT: DataclassInstance,
 ](ctx: Context[BT, CT, PT]) -> float:
     val = 0.0
 
@@ -136,16 +148,16 @@ def _objective[
         ctx.blocks
         bgroup: dict[
             BlockDesc,
-            Block[Context[BT, CT, PT], Any],
+            Block[Any],
         ] = getattr(ctx.blocks, name)
-        val += bgroup[idx].objective(ctx)
+        val += objective(bgroup[idx], ctx)
 
     for cnstrnt in fields(ctx.constraints):
         cgroup: dict[
             BlockDesc,
-            Constraint[Context[BT, CT, PT], Any],
+            Constraint[Any],
         ] = getattr(ctx.constraints, cnstrnt.name)
         for c in cgroup.values():
-            val += c.objective(ctx)
+            val += objective(c, ctx)
 
     return val

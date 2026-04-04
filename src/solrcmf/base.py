@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
-from dataclasses import Field
+from dataclasses import Field, dataclass, field
+from functools import singledispatch
 from typing import Protocol
 
 from numpy import float64
@@ -21,6 +21,27 @@ class DataclassInstance(Protocol):
     __dataclass_fields__: dict[str, Field]
 
 
+class ConstraintParams(DataclassInstance, Protocol):
+    """Protocol for parameters for Constraint blocks."""
+
+    rho: float
+
+
+@dataclass
+class Block[IdxT]:
+    name: str
+    idx: IdxT
+    shape: tuple[int, ...]
+    initialized: bool = field(default=False, init=False)
+    value: NDArray[float64] = field(init=False, repr=False)
+
+
+class Constraint[IdxT](Block[IdxT]):
+    """Base class for (multi-)affine constraints."""
+
+
+
+@dataclass
 class Context[
     BT: DataclassInstance,
     CT: DataclassInstance,
@@ -29,20 +50,8 @@ class Context[
     blocks: BT
     constraints: CT
     params: PT
-    data: dict[ViewDesc, NDArray[float64]]
-    block_order: list[tuple[str, BlockDesc]]
-
-    def __init__(
-        self,
-        blocks: BT,
-        constraints: CT,
-        params: PT,
-    ):
-        self.blocks = blocks
-        self.constraints = constraints
-        self.params = params
-        self.data = {}
-        self.block_order = []
+    data: dict[ViewDesc, NDArray[float64]] = field(default_factory=dict)
+    block_order: list[tuple[str, BlockDesc]] = field(default_factory=list)
 
     def add_block(
         self,
@@ -66,54 +75,63 @@ class Context[
         )
 
 
-class Block[CtxT: Context, IdxT](ABC):
-    name: str
-    idx: IdxT
-    shape: tuple[int, ...]
-    value: NDArray[float64]
 
-    def __init__(
-        self,
-        name: str,
-        idx: IdxT,
-        shape: tuple[int, ...],
-    ):
-        self.name = name
-        self.idx = idx
-        self.shape = shape
-
-        self.initialized = False
-
-    @abstractmethod
-    def update(self, ctx: CtxT):
-        """Update the block variables."""
-        pass
-
-    @abstractmethod
-    def objective(self, ctx: CtxT) -> float:
-        """Compute the contribution to the objective."""
-        return 0.0
+@singledispatch
+def update[
+    BT: DataclassInstance,
+    CT: DataclassInstance,
+    PT: DataclassInstance,
+    IdxT,
+](block: Block[IdxT], ctx: Context[BT, CT, PT]):
+    """Update the block variables."""
+    raise NotImplementedError(f"update() not implemented for {type(block)}.")
 
 
-class Constraint[CtxT: Context, IdxT](Block[CtxT, IdxT], ABC):
-    """Base class for (multi-)affine constraints."""
+@singledispatch
+def constraint[
+    BT: DataclassInstance,
+    CT: DataclassInstance,
+    PT: DataclassInstance,
+    IdxT,
+](block: Constraint[IdxT], ctx: Context[BT, CT, PT]) -> NDArray[float64]:
+    """Return the lhs of a constraint f(x) = 0."""
+    raise NotImplementedError(
+        f"constraint() not implemented for {type(block)}."
+    )
 
-    @abstractmethod
-    def constraint(self, ctx: CtxT) -> NDArray[float64]:
-        """Return the lhs of a constraint f(x) = 0."""
-        pass
 
-    def update(self, ctx: CtxT):
-        """Update the multipliers."""
-        self.value += self.constraint(ctx)
+@update.register
+def _[
+    BT: DataclassInstance,
+    CT: DataclassInstance,
+    PT: DataclassInstance,
+](block: Constraint, ctx: Context[BT, CT, PT]):
+    """Update the multipliers."""
+    block.value += constraint(block, ctx)
 
-    def objective(self, ctx: CtxT) -> float:
-        """Compute the contribution to the objective."""
-        return (
-            0.5
-            * ctx.params.rho
-            * (
-                ((self.constraint(ctx) + self.value) ** 2).sum()
-                - (self.value**2).sum()
-            )
+
+@singledispatch
+def objective[
+    BT: DataclassInstance,
+    CT: DataclassInstance,
+    PT: DataclassInstance,
+](block: Block, ctx: Context[BT, CT, PT]) -> float:
+    """Compute the contribution to the objective."""
+    return 0.0
+
+
+@objective.register
+def _[
+    BT: DataclassInstance,
+    CT: DataclassInstance,
+    PT: ConstraintParams,
+](block: Constraint, ctx: Context[BT, CT, PT]) -> float:
+    """Compute the contribution to the objective."""
+    return (
+        0.5
+        * ctx.params.rho
+        * (
+            ((constraint(block, ctx) + block.value) ** 2).sum()
+            - (block.value**2).sum()
         )
+    )
