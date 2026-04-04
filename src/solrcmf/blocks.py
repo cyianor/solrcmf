@@ -212,7 +212,7 @@ def _(block: VBlock, ctx: SolrCMFContext):
                 for s in ctx.params.structure_weights.values()
             ):
                 ctx.params.structure_weights = {
-                    k: s[active_factors] if isinstance(s, ndarray) else s
+                    k: s if isinstance(s, float64) else s[active_factors]
                     for k, s in ctx.params.structure_weights.items()
                 }
             for k, v in ctx.blocks.v.items():
