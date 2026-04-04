@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from dataclasses import Field
+from typing import Protocol
 
 from numpy import float64
 from numpy.typing import NDArray
@@ -10,7 +12,16 @@ type BlockDesc = tuple[Entity, *tuple[Entity, ...]] | Entity
 type ViewDesc = tuple[Entity, Entity, *tuple[Entity, ...]]
 
 
-class Context[BT, CT, PT]:
+class DataclassInstance(Protocol):
+    """Protocol for dataclass instances.
+
+    Matches the DataclassInstance definition in typeshed.
+    """
+
+    __dataclass_fields__: dict[str, Field]
+
+
+class Context[BT: DataclassInstance, CT: DataclassInstance, PT: DataclassInstance]:
     def __init__(
         self,
         blocks: BT,

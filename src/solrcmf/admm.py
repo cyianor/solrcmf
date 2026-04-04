@@ -8,10 +8,12 @@ from numpy import inf
 from sklearn.base import BaseEstimator
 from sklearn.utils._param_validation import Interval
 
-from .base import Block, BlockDesc, Constraint, Context
+from .base import Block, BlockDesc, Constraint, Context, DataclassInstance
 
 
-class ADMM[BT, CT, PT](BaseEstimator, ABC):
+class ADMM[
+    BT: DataclassInstance, CT: DataclassInstance, PT: DataclassInstance
+](BaseEstimator, ABC):
     """Base class for ADMM algorithms."""
 
     _parameter_constraints = {
@@ -125,7 +127,9 @@ class ADMM[BT, CT, PT](BaseEstimator, ABC):
         return {}
 
 
-def _objective[BT, CT, PT](ctx: Context[BT, CT, PT]) -> float:
+def _objective[
+    BT: DataclassInstance, CT: DataclassInstance, PT: DataclassInstance
+](ctx: Context[BT, CT, PT]) -> float:
     val = 0.0
 
     for name, idx in ctx.block_order:
