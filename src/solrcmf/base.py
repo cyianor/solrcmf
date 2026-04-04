@@ -21,7 +21,17 @@ class DataclassInstance(Protocol):
     __dataclass_fields__: dict[str, Field]
 
 
-class Context[BT: DataclassInstance, CT: DataclassInstance, PT: DataclassInstance]:
+class Context[
+    BT: DataclassInstance,
+    CT: DataclassInstance,
+    PT: DataclassInstance,
+]:
+    blocks: BT
+    constraints: CT
+    params: PT
+    data: dict[ViewDesc, NDArray[float64]]
+    block_order: list[tuple[str, BlockDesc]]
+
     def __init__(
         self,
         blocks: BT,
@@ -31,11 +41,8 @@ class Context[BT: DataclassInstance, CT: DataclassInstance, PT: DataclassInstanc
         self.blocks = blocks
         self.constraints = constraints
         self.params = params
-        self.data: dict[
-            ViewDesc,
-            NDArray[float64],
-        ] = {}
-        self.block_order: list[tuple[str, BlockDesc]] = []
+        self.data = {}
+        self.block_order = []
 
     def add_block(
         self,
@@ -60,6 +67,9 @@ class Context[BT: DataclassInstance, CT: DataclassInstance, PT: DataclassInstanc
 
 
 class Block[CtxT: Context, IdxT](ABC):
+    name: str
+    idx: IdxT
+    shape: tuple[int, ...]
     value: NDArray[float64]
 
     def __init__(
