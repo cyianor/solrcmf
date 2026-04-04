@@ -35,8 +35,11 @@ class Block[IdxT]:
     value: NDArray[float64] = field(init=False, repr=False)
 
 
+@dataclass
 class Constraint[IdxT](Block[IdxT]):
     """Base class for (multi-)affine constraints."""
+
+    residual: NDArray[float64] = field(init=False, repr=False)
 
 
 @dataclass
@@ -102,7 +105,8 @@ def _[
     PT: DataclassInstance,
 ](block: Constraint, ctx: Context[BT, CT, PT]):
     """Update the multipliers."""
-    block.value += constraint(block, ctx)
+    block.residual = constraint(block, ctx)
+    block.value += block.residual
 
 
 @singledispatch
@@ -126,7 +130,7 @@ def _[
         0.5
         * ctx.params.rho
         * (
-            ((constraint(block, ctx) + block.value) ** 2).sum()
+            ((block.residual + block.value) ** 2).sum()
             - (block.value**2).sum()
         )
     )

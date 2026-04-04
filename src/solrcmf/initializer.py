@@ -10,7 +10,7 @@ from numpy.linalg import qr
 from numpy.random import Generator, default_rng
 from numpy.typing import NDArray
 
-from .base import Context, Entity, ViewDesc
+from .base import Context, Entity, ViewDesc, constraint
 from .blocks import SolrCMFBlocks, SolrCMFConstraints, SolrCMFParams
 
 
@@ -55,6 +55,9 @@ class RandomInitializer:
                 ctx.constraints.factor[v].value = zeros_like(
                     ctx.blocks.v[v].value
                 )
+                ctx.constraints.factor[v].residual = constraint(
+                    ctx.constraints.factor[v], ctx
+                )
 
         for k in ctx.blocks.d.keys():
             ctx.blocks.d[k].value = self.rng.uniform(
@@ -69,6 +72,9 @@ class RandomInitializer:
 
             ctx.constraints.mean_structure[k].value = zeros_like(
                 ctx.blocks.z[k].value
+            )
+            ctx.constraints.mean_structure[k].residual = constraint(
+                ctx.constraints.mean_structure[k], ctx
             )
 
 
@@ -152,6 +158,9 @@ class FromFormerInitializer:
                     ctx.constraints.factor[v].shape = ctx.constraints.factor[
                         v
                     ].value.shape
+                    ctx.constraints.factor[v].residual = constraint(
+                        ctx.constraints.factor[v], ctx
+                    )
 
         for k in ctx.blocks.d.keys():
             ctx.blocks.d[k].value = self.ds[k][active_factors].copy()
@@ -165,4 +174,7 @@ class FromFormerInitializer:
 
             ctx.constraints.mean_structure[k].value = zeros_like(
                 ctx.blocks.z[k].value
+            )
+            ctx.constraints.mean_structure[k].residual = constraint(
+                ctx.constraints.mean_structure[k], ctx
             )
