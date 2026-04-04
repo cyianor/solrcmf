@@ -59,7 +59,7 @@ def test_smoke_custom_init():
         max_rank=2,
         cv=2,
         init="custom",
-        max_iter=100,
+        max_iter=1000,
     )
     cv.fit(X, vs=[init_est.vs_], ds=[init_est.ds_])
 
@@ -75,7 +75,7 @@ def test_cv_result_keys():
         cv=2,
         init="random",
         init_kwargs={"rng": default_rng(0)},
-        max_iter=100,
+        max_iter=1000,
     )
     cv.fit(X)
 
