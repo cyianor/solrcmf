@@ -24,7 +24,31 @@ class ADMM[
     CT: DataclassInstance,
     PT: DataclassInstance,
 ](BaseEstimator, ABC):
-    """Base class for ADMM algorithms."""
+    """Base class for multi-block ADMM algorithms.
+
+    Subclasses implement `_setup` to construct the `Context` (blocks,
+    constraints, and parameters) for a specific problem, and override
+    `score` and `transform` for evaluation and reconstruction.
+
+    The iteration alternates between updating all primal blocks in
+    `ctx.block_order`, updating all dual (constraint multiplier) variables,
+    and evaluating the augmented Lagrangian objective. Convergence is
+    declared when the absolute change in objective satisfies
+
+        |obj_old - obj| <= max(rel_tol * |obj_old|, abs_tol)
+
+    skipping the first iteration to avoid spurious convergence from the
+    initialisation.
+
+    Attributes set after `fit`:
+        objs_: Objective value at each iteration.
+        gaps_: Change in objective (obj_old - obj) at each iteration.
+        converged_: Whether the convergence criterion was met.
+        objective_value_: Final objective value.
+        n_iter_: Number of iterations performed.
+        elapsed_process_time_: CPU time consumed by the iteration loop.
+        ctx_: The context object (only when save_ctx=True).
+    """
 
     _parameter_constraints = {
         "max_iter": [Interval(Integral, 1, None, closed="left")],
@@ -68,6 +92,13 @@ class ADMM[
         )
 
     def fit(self, X, y=None, **kwargs):
+        """Run the ADMM iteration until convergence or max_iter.
+
+        Calls `_setup` to build the context, then alternates between primal
+        block updates and dual (constraint multiplier) updates. The augmented
+        Lagrangian objective is evaluated after each full sweep and checked
+        against the convergence criterion.
+        """
         # Validate parameters; should check parameters of
         # derived classes as well
         self._validate_params()
@@ -127,13 +158,20 @@ class ADMM[
 
     @abstractmethod
     def score(self, X, **kwargs):
+        """Evaluate the fit quality on X."""
         pass
 
     @abstractmethod
     def transform(self, X, y=None, **kwargs):
+        """Return the low-rank reconstruction of X."""
         pass
 
     def _extra_attrs(self, ctx: Context[BT, CT, PT]) -> dict[str, Any]:
+        """Return additional attributes to set on the estimator after fitting.
+
+        Subclasses override this to expose problem-specific fitted quantities
+        (e.g. factor matrices, structure patterns) without touching `fit`.
+        """
         return {}
 
 
@@ -142,10 +180,15 @@ def _objective[
     CT: DataclassInstance,
     PT: DataclassInstance,
 ](ctx: Context[BT, CT, PT]) -> float:
+    """Compute the full augmented Lagrangian objective.
+
+    Sums contributions from all primal blocks (data fidelity and
+    regularisation) and all constraint dual variables (augmented penalty
+    terms).
+    """
     val = 0.0
 
     for name, idx in ctx.block_order:
-        ctx.blocks
         bgroup: dict[
             BlockDesc,
             Block[Any],

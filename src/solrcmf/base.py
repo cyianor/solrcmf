@@ -29,6 +29,22 @@ class ConstraintParams(DataclassInstance, Protocol):
 
 @dataclass
 class Block[IdxT]:
+    """A single block of ADMM primal variables.
+
+    Each block owns one array `value` and contributes to both the primal
+    update (via `update`) and the objective function (via `objective`).
+    It is identified by a name and an index `idx`. The `update` and
+    `objective` singledispatch functions are registered separately for
+    each concrete subclass.
+
+    Attributes:
+        name: Attribute name on the blocks dataclass (e.g. "z", "d", "v").
+        idx: Key under which this block is stored in the dict on that attr.
+        shape: Expected shape of `value`.
+        value: The current iterate; initialised by the concrete update.
+
+    """
+
     name: str
     idx: IdxT
     shape: tuple[int, ...]
@@ -37,7 +53,19 @@ class Block[IdxT]:
 
 @dataclass
 class Constraint[IdxT](Block[IdxT]):
-    """Base class for (multi-)affine constraints."""
+    """A block of ADMM dual variables enforcing a multi-affine constraint.
+
+    `value` holds the dual multiplier. `update` performs the dual ascent
+    step value += residual. `objective` computes the augmented Lagrangian
+    penalty term. Both use the `constraint` singledispatch function to
+    obtain the primal residual, which is cached in `residual` after each
+    `update` to avoid recomputation in `objective`.
+
+    Attributes:
+        residual: The most recently computed primal residual; set by
+            `update` and consumed by `objective` within the same iteration.
+
+    """
 
     residual: NDArray[float64] = field(init=False, repr=False)
 
@@ -48,6 +76,21 @@ class Context[
     CT: DataclassInstance,
     PT: DataclassInstance,
 ]:
+    """Shared state passed to every block and constraint update.
+
+    Holds the primal blocks, dual constraints, algorithm parameters,
+    observed data, and the ordered list of blocks to update each iteration.
+
+    Attributes:
+        blocks: Dataclass holding all primal block dicts.
+        constraints: Dataclass holding all constraint (dual variable) dicts.
+        params: Algorithm parameters (rho, penalties, etc.).
+        data: Observed data matrices keyed by view descriptor.
+        block_order: Ordered list of (name, idx) pairs defining the update
+            sequence within each ADMM iteration.
+
+    """
+
     blocks: BT
     constraints: CT
     params: PT
@@ -61,6 +104,7 @@ class Context[
         block_type: type[Block],
         shape: tuple[int, ...],
     ):
+        """Instantiate a primal block and register it in the update order."""
         self.block_order.append((name, idx))
         getattr(self.blocks, name)[idx] = block_type(name, idx, shape)
 
@@ -71,6 +115,7 @@ class Context[
         constraint_type: type[Constraint],
         shape: tuple[int, ...],
     ):
+        """Instantiate a constraint (dual variable) block."""
         getattr(self.constraints, name)[idx] = constraint_type(
             name, idx, shape
         )
