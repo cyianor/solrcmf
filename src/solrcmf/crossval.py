@@ -352,7 +352,7 @@ class SolrCMFCV(BaseEstimator):
             if self.init == "random":
                 # We need to split the randomness for random initialization
                 child_states = reshape(
-                    rng.bit_generator._seed_seq.spawn(n_reps * n_params),
+                    rng.bit_generator.spawn(n_reps * n_params),
                     (n_params, n_reps),
                 )
             else:
@@ -588,7 +588,7 @@ class SolrCMFCV(BaseEstimator):
             if self.init == "random":
                 # We need to split the randomness for random initialization
                 child_states = reshape(
-                    rng.bit_generator._seed_seq.spawn(
+                    rng.bit_generator.spawn(
                         n_reps * n_params * n_folds
                     ),
                     (n_params, n_reps, n_folds),
