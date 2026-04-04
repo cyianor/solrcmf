@@ -121,7 +121,7 @@ class SolrCMF(ADMM[SolrCMFBlocks, SolrCMFConstraints, SolrCMFParams]):
             raise TypeError("'X' needs to be a dictionary of data matrices")
 
         for x in X.values():
-            x = check_array(x, force_all_finite="allow-nan")
+            x = check_array(x, ensure_all_finite="allow-nan")
 
         layout = X.keys()
         # The first two tuple indices indicate the views.

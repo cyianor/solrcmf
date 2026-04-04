@@ -82,7 +82,7 @@ def bicenter(
             overall mean m, as well as row-means rm and column-means cm.
 
     """
-    X = check_array(X, force_all_finite="allow-nan")
+    X = check_array(X, ensure_all_finite="allow-nan")
     if tol <= 0:
         raise ValueError(f"{tol=} needs to be positive")
     if not (isinstance(max_iter, Integral) and max_iter > 0):
@@ -174,7 +174,7 @@ def nanscale(
         A scaled version of the input array.
 
     """
-    X = check_array(X, force_all_finite="allow-nan")
+    X = check_array(X, ensure_all_finite="allow-nan")
     if scale <= 0.0:
         raise ValueError(f"{scale=} is required to be positive")
 

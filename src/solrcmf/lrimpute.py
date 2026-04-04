@@ -55,7 +55,7 @@ class LowRankImputation(BaseEstimator):
         self._validate_params()
 
         X = check_array(
-            X, dtype=[float64, float32], force_all_finite="allow-nan"
+            X, dtype=[float64, float32], ensure_all_finite="allow-nan"
         )
 
         if U is not None or V is not None:
