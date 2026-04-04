@@ -808,6 +808,7 @@ class SolrCMFCV(BaseEstimator):
             # Either because it is the final fit or because we need the
             # structure/factor pattern.
             if self.init == "custom":
+                assert vs is not None and ds is not None
                 vs_init = vs[best_runs[self.best_index_]]
                 ds_init = ds[best_runs[self.best_index_]]
                 if us is not None:
