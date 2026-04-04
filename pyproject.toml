@@ -1,3 +1,7 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "solrcmf"
 description = "Tools for integrative analysis in flexible matrix layouts using penalized optimization techniques"
@@ -15,7 +19,6 @@ dependencies = [
     "numpy>=1.23",
     "joblib>=1.3.2",
     "scikit-learn>=1.1.0",
-    "typing-extensions>=4.9.0; python_version < '3.11'",
     "mkdocs-jupyter>=0.25.1",
 ]
 
@@ -24,9 +27,16 @@ dependencies = [
 "Source" = "https://github.com/cyianor/solrcmf"
 "Bug Tracker" = "https://github.com/cyianor/solrcmf/issues"
 
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+[dependency-groups]
+dev = [
+    "coverage>=7.10.7",
+    "jupyter>=1.1.1",
+    "mkdocs>=1.6.1",
+    "mkdocs-material>=9.6.20",
+    "mkdocstrings[python]>=0.30.0",
+    "pandas>=2.3.2",
+    "pytest>=8.4.2",
+]
 
 [tool.hatch.version]
 path = "src/solrcmf/__about__.py"
@@ -36,15 +46,16 @@ exclude = [
     "README.ipynb",
 ]
 
-[dependency-groups]
-dev = [
-    "jupyter>=1.1.1",
-    "mkdocs>=1.6.1",
-    "mkdocs-material>=9.6.20",
-    "mkdocstrings[python]>=0.30.0",
-    "pandas>=2.3.2",
+[tool.pytest.ini_options]
+addopts = [
+    "--import-mode=importlib",
 ]
 
 [tool.ruff]
-select = ["I", "E", "F", "W", "D"]
 line-length = 79
+
+[tool.ruff.lint]
+select = ["I", "E", "F", "W", "D"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["D"]
