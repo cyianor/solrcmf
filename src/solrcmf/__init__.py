@@ -1,3 +1,11 @@
+from solrcmf.crossval import SolrCMFCV
+from solrcmf.initstrategies import best_random_init, multiview_init
+from solrcmf.lrimpute import LowRankImputation
+from solrcmf.preprocess import bicenter, nanscale
+from solrcmf.simulate import simulate
+from solrcmf.solrcmf import SolrCMF
+from solrcmf.splits import ElementwiseFolds
+
 __all__ = [
     "SolrCMF",
     "SolrCMFCV",
@@ -9,11 +17,3 @@ __all__ = [
     "bicenter",
     "nanscale",
 ]
-
-from .solrcmf import SolrCMF
-from .splits import ElementwiseFolds
-from .crossval import SolrCMFCV
-from .simulate import simulate
-from .initstrategies import multiview_init, best_random_init
-from .lrimpute import LowRankImputation
-from .preprocess import bicenter, nanscale
