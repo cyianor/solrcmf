@@ -4,7 +4,6 @@ from warnings import warn
 
 from numpy import (
     bool_,
-    diag,
     flatnonzero,
     float64,
     intp,
@@ -408,7 +407,7 @@ class SolrCMF(ADMM[SolrCMFBlocks, SolrCMFConstraints, SolrCMFParams]):
         check_is_fitted(self)
 
         return {
-            k: self.vs_[k[0]] @ diag(d) @ self.vs_[k[1]].T
+            k: (self.vs_[k[0]] * d) @ self.vs_[k[1]].T
             for k, d in self.ds_.items()
         }
 

@@ -7,7 +7,6 @@ from numpy import (
     abs,
     argmin,
     bool_,
-    diag,
     float64,
     intp,
     maximum,
@@ -97,8 +96,7 @@ class ZBlock(Block[ViewDesc]):
 def _(block: ZBlock, ctx: SolrCMFContext):
     """Proximal step blending observed data with the low-rank estimate."""
     block.value = (1.0 - 1.0 / (1.0 + ctx.params.rho)) * (
-        ctx.blocks.v[block.idx[0]].value
-        @ diag(ctx.blocks.d[block.idx].value)
+        (ctx.blocks.v[block.idx[0]].value * ctx.blocks.d[block.idx].value)
         @ ctx.blocks.v[block.idx[1]].value.T
         - ctx.constraints.mean_structure[block.idx].value
     )
@@ -137,16 +135,14 @@ class DBlock(Block[ViewDesc]):
 @update.register
 def _(block: DBlock, ctx: SolrCMFContext):
     """Soft-threshold or pattern-mask the projected residual."""
-    tmp = diag(
-        ctx.blocks.v[block.idx[0]].value.T
-        @ (
-            (
-                ctx.blocks.z[block.idx].value
-                + ctx.constraints.mean_structure[block.idx].value
-            )
-            @ ctx.blocks.v[block.idx[1]].value
-        )
+    M = (
+        ctx.blocks.z[block.idx].value
+        + ctx.constraints.mean_structure[block.idx].value
     )
+    tmp = (
+        ctx.blocks.v[block.idx[0]].value
+        * (M @ ctx.blocks.v[block.idx[1]].value)
+    ).sum(axis=0)
     if ctx.params.fixed_structure_pattern:
         # If zero pattern is known
         block.value = tmp * ctx.params.structure_pattern[block.idx]
@@ -243,13 +239,9 @@ def _(block: VBlock, ctx: SolrCMFContext):
 
     for vidx, cidx in ctx.params.vidx_cidx[block.idx]:
         tmp += (
-            (
-                ctx.blocks.z[vidx].value
-                + ctx.constraints.mean_structure[vidx].value
-            )
-            @ ctx.blocks.v[cidx].value
-            @ diag(ctx.blocks.d[vidx].value)
-        )
+            ctx.blocks.z[vidx].value
+            + ctx.constraints.mean_structure[vidx].value
+        ) @ (ctx.blocks.v[cidx].value * ctx.blocks.d[vidx].value)
 
     for vidx, ridx in ctx.params.vidx_ridx[block.idx]:
         tmp += (
@@ -258,8 +250,7 @@ def _(block: VBlock, ctx: SolrCMFContext):
                 + ctx.constraints.mean_structure[vidx].value
             ).T
             @ ctx.blocks.v[ridx].value
-            @ diag(ctx.blocks.d[vidx].value)
-        )
+        ) * ctx.blocks.d[vidx].value
 
     u, _, vt = svd(tmp, full_matrices=False)
     block.value = u @ vt
@@ -382,8 +373,7 @@ def _(block: MeanStructureConstraint, ctx: SolrCMFContext) -> NDArray[float64]:
     """Return the primal residual Z - V D V^T."""
     return (
         ctx.blocks.z[block.idx].value
-        - ctx.blocks.v[block.idx[0]].value
-        @ diag(ctx.blocks.d[block.idx].value)
+        - (ctx.blocks.v[block.idx[0]].value * ctx.blocks.d[block.idx].value)
         @ ctx.blocks.v[block.idx[1]].value.T
     )
 
