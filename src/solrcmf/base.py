@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import Field, dataclass, field
 from functools import singledispatch
-from typing import Any, Protocol
+from typing import Protocol
 
 from numpy import float64
 from numpy.typing import NDArray
@@ -79,7 +79,7 @@ def update[
     BT: DataclassInstance,
     CT: DataclassInstance,
     PT: DataclassInstance,
-](block: Block[Any], ctx: Context[BT, CT, PT]):
+](block: Block, ctx: Context[BT, CT, PT]):
     """Update the block variables."""
     raise NotImplementedError(f"update() not implemented for {type(block)}.")
 
@@ -89,7 +89,7 @@ def constraint[
     BT: DataclassInstance,
     CT: DataclassInstance,
     PT: DataclassInstance,
-](block: Constraint[Any], ctx: Context[BT, CT, PT]) -> NDArray[float64]:
+](block: Constraint, _ctx: Context[BT, CT, PT]) -> NDArray[float64]:
     """Return the lhs of a constraint f(x) = 0."""
     raise NotImplementedError(
         f"constraint() not implemented for {type(block)}."
@@ -101,7 +101,7 @@ def _[
     BT: DataclassInstance,
     CT: DataclassInstance,
     PT: DataclassInstance,
-](block: Constraint[Any], ctx: Context[BT, CT, PT]):
+](block: Constraint, ctx: Context[BT, CT, PT]):
     """Update the multipliers."""
     block.value += constraint(block, ctx)
 
@@ -121,7 +121,7 @@ def _[
     BT: DataclassInstance,
     CT: DataclassInstance,
     PT: ConstraintParams,
-](block: Constraint[Any], ctx: Context[BT, CT, PT]) -> float:
+](block: Constraint, ctx: Context[BT, CT, PT]) -> float:
     """Compute the contribution to the objective."""
     return (
         0.5
