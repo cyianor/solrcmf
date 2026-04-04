@@ -46,37 +46,30 @@ class RandomInitializer:
             ctx.blocks.v[v].value = qr(
                 self.rng.standard_normal(ctx.blocks.v[v].shape)
             ).Q
-            ctx.blocks.v[v].initialized = True
 
             if ctx.params.factor_sparsity or ctx.params.fixed_factor_pattern:
                 ctx.blocks.u[v].value = ctx.blocks.v[v].value.copy()
-                ctx.blocks.u[v].initialized = True
 
                 ctx.blocks.vp[v].value = zeros_like(ctx.blocks.v[v].value)
-                ctx.blocks.vp[v].initialized = True
 
                 ctx.constraints.factor[v].value = zeros_like(
                     ctx.blocks.v[v].value
                 )
-                ctx.constraints.factor[v].initialized = True
 
         for k in ctx.blocks.d.keys():
             ctx.blocks.d[k].value = self.rng.uniform(
                 -1.0, 1.0, ctx.blocks.d[k].shape
             )
-            ctx.blocks.d[k].initialized = True
 
             ctx.blocks.z[k].value = (
                 ctx.blocks.v[k[0]].value
                 @ diag(ctx.blocks.d[k].value)
                 @ ctx.blocks.v[k[1]].value.T
             )
-            ctx.blocks.z[k].initialized = True
 
             ctx.constraints.mean_structure[k].value = zeros_like(
                 ctx.blocks.z[k].value
             )
-            ctx.constraints.mean_structure[k].initialized = True
 
 
 class FromFormerInitializer:
@@ -140,7 +133,6 @@ class FromFormerInitializer:
         for v in ctx.blocks.v.keys():
             ctx.blocks.v[v].value = self.vs[v][:, active_factors].copy()
             ctx.blocks.v[v].shape = ctx.blocks.v[v].value.shape
-            ctx.blocks.v[v].initialized = True
 
             if ctx.params.factor_sparsity or ctx.params.fixed_factor_pattern:
                 if self.us is not None:
@@ -148,13 +140,11 @@ class FromFormerInitializer:
                         :, active_factors
                     ].copy()
                     ctx.blocks.u[v].shape = ctx.blocks.u[v].value.shape
-                    ctx.blocks.u[v].initialized = True
 
                     ctx.blocks.vp[v].value = (
                         ctx.blocks.u[v].value - ctx.blocks.v[v].value
                     )
                     ctx.blocks.vp[v].shape = ctx.blocks.vp[v].value.shape
-                    ctx.blocks.vp[v].initialized = True
 
                     ctx.constraints.factor[v].value = zeros_like(
                         ctx.blocks.v[v].value
@@ -162,21 +152,17 @@ class FromFormerInitializer:
                     ctx.constraints.factor[v].shape = ctx.constraints.factor[
                         v
                     ].value.shape
-                    ctx.constraints.factor[v].initialized = True
 
         for k in ctx.blocks.d.keys():
             ctx.blocks.d[k].value = self.ds[k][active_factors].copy()
             ctx.blocks.d[k].shape = ctx.blocks.d[k].value.shape
-            ctx.blocks.d[k].initialized = True
 
             ctx.blocks.z[k].value = (
                 ctx.blocks.v[k[0]].value
                 @ diag(ctx.blocks.d[k].value)
                 @ ctx.blocks.v[k[1]].value.T
             )
-            ctx.blocks.z[k].initialized = True
 
             ctx.constraints.mean_structure[k].value = zeros_like(
                 ctx.blocks.z[k].value
             )
-            ctx.constraints.mean_structure[k].initialized = True

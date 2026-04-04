@@ -32,7 +32,6 @@ class Block[IdxT]:
     name: str
     idx: IdxT
     shape: tuple[int, ...]
-    initialized: bool = field(default=False, init=False)
     value: NDArray[float64] = field(init=False, repr=False)
 
 
