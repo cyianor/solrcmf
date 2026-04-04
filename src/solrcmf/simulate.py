@@ -147,17 +147,18 @@ def simulate(
     if not all(s > 0.0 for s in scales.values()):
         raise ValueError("Each value in 'scales' needs to be positive")
 
-    if isinstance(snr, Mapping):
+    if isinstance(snr, (int, float)):
+        if snr <= 0.0:
+            raise ValueError("'snr' needs to be positive")
+        snr = {k: float(snr) for k in factor_scales_.keys()}
+    else:
         if snr.keys() != factor_scales_.keys():
             raise ValueError(
                 "'snr' needs to be compatible with 'factor_scales'"
             )
         if not all(s > 0.0 for s in snr.values()):
             raise ValueError("Each value in 'snr' needs to be positive")
-    else:
-        if snr <= 0.0:
-            raise ValueError("'snr' needs to be positive")
-        snr = {k: snr for k in factor_scales_.keys()}
+        snr = dict(snr)
 
     if factor_sparsity is None:
         vs = {
