@@ -72,11 +72,19 @@ class SolrCMFParams:
     vp_weights: dict[Entity, float] = field(default_factory=dict)
 
 
-SolrCMFContext = Context[SolrCMFBlocks, SolrCMFConstraints, SolrCMFParams]
+type SolrCMFContext = Context[SolrCMFBlocks, SolrCMFConstraints, SolrCMFParams]
 
 
 class ZBlock(Block[SolrCMFContext, ViewDesc]):
+    """Low-rank reconstruction variable Z for a given data matrix.
+
+    Z absorbs the data fidelity term. Its update is the proximal step
+    that blends the current low-rank estimate V D V^T with the observed
+    entries of X, leaving missing entries equal to the estimate.
+    """
+
     def update(self, ctx: SolrCMFContext):
+        """Proximal step blending observed data with the low-rank estimate."""
         self.value = (1.0 - 1.0 / (1.0 + ctx.params.rho)) * (
             ctx.blocks.v[self.idx[0]].value
             @ diag(ctx.blocks.d[self.idx].value)
@@ -91,6 +99,7 @@ class ZBlock(Block[SolrCMFContext, ViewDesc]):
         )
 
     def objective(self, ctx: SolrCMFContext) -> float:
+        """Half the squared reconstruction error on observed entries."""
         return 0.5 * sum(
             (
                 ctx.data[self.idx].flat[ctx.params.flat_indices[self.idx]]
@@ -101,9 +110,17 @@ class ZBlock(Block[SolrCMFContext, ViewDesc]):
 
 
 class DBlock(Block[SolrCMFContext, ViewDesc]):
+    """Diagonal scaling matrix D for a given view pair.
+
+    D encodes the per-factor signal strengths. Its update applies
+    soft-thresholding to learn the structure pattern or masks by a
+    fixed pattern when one is provided.
+    """
+
     active_factors: NDArray[bool_]
 
     def update(self, ctx: SolrCMFContext):
+        """Soft-threshold or pattern-mask the projected residual."""
         tmp = diag(
             ctx.blocks.v[self.idx[0]].value.T
             @ (
@@ -133,6 +150,7 @@ class DBlock(Block[SolrCMFContext, ViewDesc]):
             self.active_factors = self.value != 0.0
 
     def objective(self, ctx: SolrCMFContext) -> float64:
+        """L1 structure penalty weighted by structure_weights."""
         if ctx.params.fixed_structure_pattern:
             return float64(0.0)
 
@@ -144,7 +162,16 @@ class DBlock(Block[SolrCMFContext, ViewDesc]):
 
 
 class VBlock(Block[SolrCMFContext, Entity]):
+    """Orthogonal factor matrix V for a given view.
+
+    V is updated via a Procrustes step: SVD of the gradient aggregated
+    from all data matrices that involve this view yields the nearest
+    column-orthonormal matrix. Factor pruning (removing globally inactive
+    columns across all D blocks) is also handled here.
+    """
+
     def update(self, ctx: SolrCMFContext):
+        """Procrustes step via SVD; prune inactive columns if enabled."""
         if ctx.params.factor_pruning:
             active_factors: NDArray[bool_] = (
                 vstack([d.active_factors for d in ctx.blocks.d.values()]).sum(
@@ -220,11 +247,20 @@ class VBlock(Block[SolrCMFContext, Entity]):
         self.value = u @ vt
 
     def objective(self, ctx: SolrCMFContext) -> float64:
+        """Return 0 since V carries no direct penalty term."""
         return float64(0.0)
 
 
 class UBlock(Block[SolrCMFContext, Entity]):
+    """Sparse factor variable U for a given view.
+
+    U decouples factor sparsity from the orthogonality constraint on V.
+    Its update applies soft-thresholding (or fixed-pattern masking)
+    followed by column normalization.
+    """
+
     def update(self, ctx: SolrCMFContext):
+        """Soft-threshold or pattern-mask then column-normalize."""
         m = (
             ctx.blocks.v[self.idx].value
             + ctx.blocks.vp[self.idx].value
@@ -267,6 +303,7 @@ class UBlock(Block[SolrCMFContext, Entity]):
         self.value = m / sqrt((m**2).sum(0))
 
     def objective(self, ctx: SolrCMFContext) -> float:
+        """L1 factor sparsity penalty weighted by factor_weights."""
         if ctx.params.fixed_factor_pattern:
             return 0.0
 
@@ -278,7 +315,16 @@ class UBlock(Block[SolrCMFContext, Entity]):
 
 
 class VpBlock(Block[SolrCMFContext, Entity]):
+    """Auxiliary slack variable V' that decouples the U and V subproblems.
+
+    Introducing V' turns the coupling constraint U = V into two separate
+    constraints, U - V' = 0 and V' - V = 0, so the sparse U update and the
+    orthogonal V update can each be solved independently. The mu penalty
+    (0.5 * mu * w * ||V'||_F^2) controls how tightly V' tracks V.
+    """
+
     def update(self, ctx: SolrCMFContext):
+        """Proximal step for the ridge penalty 0.5 * mu * w * ||V'||_F^2."""
         self.value = (
             ctx.params.rho
             / (
@@ -293,6 +339,7 @@ class VpBlock(Block[SolrCMFContext, Entity]):
         )
 
     def objective(self, ctx: SolrCMFContext) -> float:
+        """Ridge penalty 0.5 * mu * w * ||V'||_F^2."""
         return (
             0.5
             * ctx.params.mu
@@ -302,7 +349,10 @@ class VpBlock(Block[SolrCMFContext, Entity]):
 
 
 class MeanStructureConstraint(Constraint[SolrCMFContext, ViewDesc]):
+    """ADMM dual variable for the constraint Z = V D V^T."""
+
     def constraint(self, ctx: SolrCMFContext) -> NDArray[float64]:
+        """Return the primal residual Z - V D V^T."""
         return (
             ctx.blocks.z[self.idx].value
             - ctx.blocks.v[self.idx[0]].value
@@ -312,7 +362,10 @@ class MeanStructureConstraint(Constraint[SolrCMFContext, ViewDesc]):
 
 
 class FactorConstraint(Constraint[SolrCMFContext, Entity]):
+    """ADMM dual variable for the constraint U = V + V'."""
+
     def constraint(self, ctx: SolrCMFContext) -> NDArray[float64]:
+        """Return the primal residual U - V - V'."""
         return (
             ctx.blocks.u[self.idx].value
             - ctx.blocks.v[self.idx].value

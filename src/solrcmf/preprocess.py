@@ -83,10 +83,10 @@ def bicenter(
 
     """
     X = check_array(X, force_all_finite="allow-nan")
-    assert tol > 0, f"{tol=} needs to be positive"
-    assert isinstance(max_iter, Integral) and max_iter > 0, (
-        f"{max_iter=} needs to be a positive integer"
-    )
+    if tol <= 0:
+        raise ValueError(f"{tol=} needs to be positive")
+    if not (isinstance(max_iter, Integral) and max_iter > 0):
+        raise ValueError(f"{max_iter=} needs to be a positive integer")
 
     n, p = X.shape
 
@@ -175,7 +175,8 @@ def nanscale(
 
     """
     X = check_array(X, force_all_finite="allow-nan")
-    assert scale > 0.0, f"{scale=} is required to be positive"
+    if scale <= 0.0:
+        raise ValueError(f"{scale=} is required to be positive")
 
     Y = full(X.shape, nan, dtype=X.dtype)
     divide(

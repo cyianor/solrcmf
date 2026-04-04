@@ -1,32 +1,21 @@
 from __future__ import annotations
 
-from abc import ABCMeta, abstractmethod
-from typing import Generic, TypeVar
+from abc import ABC, abstractmethod
 
 from numpy import float64
 from numpy.typing import NDArray
 
-try:
-    from typing import Unpack
-except ImportError:
-    from typing_extensions import Unpack
-
-Entity = str | int
-BlockDesc = tuple[Entity, Unpack[tuple[Entity, ...]]] | Entity
-ViewDesc = tuple[Entity, Entity, Unpack[tuple[Entity, ...]]]
-
-BlocksType = TypeVar("BlocksType")
-ConstraintsType = TypeVar("ConstraintsType")
-ParamsType = TypeVar("ParamsType")
-IndexType = TypeVar("IndexType")
+type Entity = str | int
+type BlockDesc = tuple[Entity, *tuple[Entity, ...]] | Entity
+type ViewDesc = tuple[Entity, Entity, *tuple[Entity, ...]]
 
 
-class Context[BlocksType, ConstraintsType, ParamsType]:
+class Context[BT, CT, PT]:
     def __init__(
         self,
-        blocks: BlocksType,
-        constraints: ConstraintsType,
-        params: ParamsType,
+        blocks: BT,
+        constraints: CT,
+        params: PT,
     ):
         self.blocks = blocks
         self.constraints = constraints
@@ -59,16 +48,13 @@ class Context[BlocksType, ConstraintsType, ParamsType]:
         )
 
 
-ContextType = TypeVar("ContextType", bound=Context)
-
-
-class Block(Generic[ContextType, IndexType], metaclass=ABCMeta):
+class Block[CtxT: Context, IdxT](ABC):
     value: NDArray[float64]
 
     def __init__(
         self,
         name: str,
-        idx: IndexType,
+        idx: IdxT,
         shape: tuple[int, ...],
     ):
         self.name = name
@@ -78,29 +64,29 @@ class Block(Generic[ContextType, IndexType], metaclass=ABCMeta):
         self.initialized = False
 
     @abstractmethod
-    def update(self, ctx: ContextType):
+    def update(self, ctx: CtxT):
         """Update the block variables."""
         pass
 
     @abstractmethod
-    def objective(self, ctx: ContextType) -> float:
+    def objective(self, ctx: CtxT) -> float:
         """Compute the contribution to the objective."""
         return 0.0
 
 
-class Constraint(Block[ContextType, IndexType], metaclass=ABCMeta):
+class Constraint[CtxT: Context, IdxT](Block[CtxT, IdxT], ABC):
     """Base class for (multi-)affine constraints."""
 
     @abstractmethod
-    def constraint(self, ctx: ContextType) -> NDArray[float64]:
+    def constraint(self, ctx: CtxT) -> NDArray[float64]:
         """Return the lhs of a constraint f(x) = 0."""
         pass
 
-    def update(self, ctx: ContextType):
+    def update(self, ctx: CtxT):
         """Update the multipliers."""
         self.value += self.constraint(ctx)
 
-    def objective(self, ctx: ContextType) -> float:
+    def objective(self, ctx: CtxT) -> float:
         """Compute the contribution to the objective."""
         return (
             0.5

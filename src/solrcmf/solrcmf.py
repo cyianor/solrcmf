@@ -1,5 +1,5 @@
 from numbers import Integral, Real
-from typing import Any
+from typing import Any, override
 from warnings import warn
 
 from numpy import (
@@ -38,7 +38,7 @@ from .initializer import FromFormerInitializer, RandomInitializer
 from .metrics import neg_mean_squared_error
 
 
-class SolrCMF(ADMM):
+class SolrCMF(ADMM[SolrCMFBlocks, SolrCMFConstraints, SolrCMFParams]):
     """Sparse orthgonal low-rank Collective Matrix Factorization.
 
     Implements sparse orthogonal low-rank Collective Matrix Factorization
@@ -97,6 +97,7 @@ class SolrCMF(ADMM):
         self.alpha = alpha
         self.mu = mu
 
+    @override
     def _setup(
         self,
         X: dict[ViewDesc, NDArray[float64]],
@@ -111,13 +112,13 @@ class SolrCMF(ADMM):
         vs: dict[Entity, NDArray[float64]] | None = None,
         ds: dict[ViewDesc, NDArray[float64]] | None = None,
         us: dict[Entity, NDArray[float64]] | None = None,
+        **kwargs,
     ):
         # A context will be populated throughout setup
         ctx = Context(SolrCMFBlocks(), SolrCMFConstraints(), SolrCMFParams())
 
-        assert isinstance(X, dict), (
-            "'X' needs to be a dictionary of data matrices"
-        )
+        if not isinstance(X, dict):
+            raise TypeError("'X' needs to be a dictionary of data matrices")
 
         for x in X.values():
             x = check_array(x, force_all_finite="allow-nan")
@@ -130,26 +131,30 @@ class SolrCMF(ADMM):
         viewdims_set = set(
             [(k[i], x.shape[i]) for k, x in X.items() for i in range(2)]
         )
-        assert len(views) == len(viewdims_set), (
-            "Views do not have consistent dimensions across layout. Received"
-            f" matrices with dimensions {viewdims_set}."
-        )
+        if len(views) != len(viewdims_set):
+            raise ValueError(
+                "Views do not have consistent dimensions across layout."
+                f" Received matrices with dimensions {viewdims_set}."
+            )
         viewdims = dict(viewdims_set)
 
         ctx.data = X
 
-        assert bool(
-            self.structure_penalty is None and self.max_rank is None
-        ) ^ bool(structure_pattern is None), (
-            "Either both structure_penalty and max_rank, or "
-            " structure_pattern need to be provided. The respective"
-            " other(s) need to be None."
-        )
+        if not (
+            bool(self.structure_penalty is None and self.max_rank is None)
+            ^ bool(structure_pattern is None)
+        ):
+            raise ValueError(
+                "Either both structure_penalty and max_rank, or"
+                " structure_pattern need to be provided. The respective"
+                " other(s) need to be None."
+            )
 
-        assert self.factor_penalty is None or factor_pattern is None, (
-            "One or both of `factor_penalty` and `factor_pattern`"
-            " need to be None."
-        )
+        if self.factor_penalty is not None and factor_pattern is not None:
+            raise ValueError(
+                "One or both of `factor_penalty` and `factor_pattern`"
+                " need to be None."
+            )
 
         if self.structure_penalty is not None and self.max_rank is not None:
             ctx.params.structure_penalty = self.structure_penalty
@@ -165,20 +170,23 @@ class SolrCMF(ADMM):
 
             ctx.params.fixed_structure_pattern = False
         else:
-            assert not self.factor_pruning and isinstance(
-                structure_pattern, dict
-            ), "Set 'factor_pruning' to False to use 'structure_pattern'"
-            assert structure_pattern.keys() == X.keys(), (
-                "'structure_pattern' must contain one pattern for each data"
-                f" matrix. Expected: {X.keys()}, observed:"
-                f" {structure_pattern.keys()}"
-            )
+            if self.factor_pruning or not isinstance(structure_pattern, dict):
+                raise ValueError(
+                    "Set 'factor_pruning' to False to use 'structure_pattern'"
+                )
+            if structure_pattern.keys() != X.keys():
+                raise ValueError(
+                    "'structure_pattern' must contain one pattern for each"
+                    f" data matrix. Expected: {X.keys()}, observed:"
+                    f" {structure_pattern.keys()}"
+                )
 
             rks: set[int] = set(p.shape[0] for p in structure_pattern.values())
-            assert len(rks) == 1, (
-                "All patterns in 'structure_pattern' should have the same"
-                f" length. Observed lengths: {rks}"
-            )
+            if len(rks) != 1:
+                raise ValueError(
+                    "All patterns in 'structure_pattern' should have the same"
+                    f" length. Observed lengths: {rks}"
+                )
             # Extract the only element
             max_rank = list(rks)[0]
 
@@ -188,22 +196,17 @@ class SolrCMF(ADMM):
         ctx.params.max_rank = max_rank
 
         for v, p in viewdims.items():
-            assert p >= max_rank, (
-                f"View {v} has dimension {p} which is less than the maximum"
-                f" requested rank {max_rank}"
-            )
+            if p < max_rank:
+                raise ValueError(
+                    f"View {v} has dimension {p} which is less than the"
+                    f" maximum requested rank {max_rank}"
+                )
 
         if self.factor_penalty is not None:
             if self.mu is None:
                 ctx.params.mu = 10.0
             else:
                 ctx.params.mu = self.mu
-
-            # assert self.mu is not None, (
-            #     f"mu needs to be provided in {self.__class__.__name__} when"
-            #     " factor_penalty is not None"
-            # )
-            # ctx.params.mu = self.mu
 
             ctx.params.factor_penalty = self.factor_penalty
             ctx.params.factor_sparsity = True
@@ -219,45 +222,44 @@ class SolrCMF(ADMM):
             ctx.params.factor_sparsity = False
 
         if factor_pattern is not None:
-            assert not self.factor_pruning, (
-                "Set 'factor_pruning' to False to use 'factor_pattern'"
-            )
+            if self.factor_pruning:
+                raise ValueError(
+                    "Set 'factor_pruning' to False to use 'factor_pattern'"
+                )
 
             if self.mu is None:
                 ctx.params.mu = 10.0
             else:
                 ctx.params.mu = self.mu
 
-            # assert self.mu is not None, (
-            #     f"mu needs to be provided in {self.__class__.__name__} when"
-            #     " factor_pattern is not None"
-            # )
-            # ctx.params.mu = self.mu
-
             # Check factor pattern's correctness
-            assert factor_pattern.keys() == viewdims.keys(), (
-                "'factor_pattern' needs to contain a pattern for each view."
-                f" Views = {viewdims.keys()}, Patterns available for views ="
-                f" {factor_pattern.keys()}"
-            )
+            if factor_pattern.keys() != viewdims.keys():
+                raise ValueError(
+                    "'factor_pattern' needs to contain a pattern for each"
+                    f" view. Views = {viewdims.keys()}, Patterns available"
+                    f" for views = {factor_pattern.keys()}"
+                )
             dims = {k: p.shape[0] for k, p in factor_pattern.items()}
-            assert dims == viewdims, (
-                f"View dimensions in 'factor_pattern' ({dims}) do not agree"
-                f" with view dimensions in data ({viewdims})."
-            )
+            if dims != viewdims:
+                raise ValueError(
+                    f"View dimensions in 'factor_pattern' ({dims}) do not"
+                    f" agree with view dimensions in data ({viewdims})."
+                )
             rks = set(p.shape[1] for p in factor_pattern.values())
-            assert len(rks) == 1, (
-                "The patterns in 'factor_pattern' need to have the same"
-                f" number of columns. Observed sizes = {rks}"
-            )
+            if len(rks) != 1:
+                raise ValueError(
+                    "The patterns in 'factor_pattern' need to have the same"
+                    f" number of columns. Observed sizes = {rks}"
+                )
             # Extract the only element
             rk = list(rks)[0]
-            assert rk == max_rank, (
-                "Number of columns in 'factor_pattern' needs to match"
-                " 'max_rank' or number of elements in each"
-                f" 'structure_pattern'. Expected: {max_rank}, observed:"
-                f" {rk}"
-            )
+            if rk != max_rank:
+                raise ValueError(
+                    "Number of columns in 'factor_pattern' needs to match"
+                    " 'max_rank' or number of elements in each"
+                    f" 'structure_pattern'. Expected: {max_rank}, observed:"
+                    f" {rk}"
+                )
 
             ctx.params.factor_pattern = factor_pattern
             ctx.params.fixed_factor_pattern = True
@@ -280,10 +282,11 @@ class SolrCMF(ADMM):
         else:
             rho = self.rho
 
-        assert rho > rho_lb, (
-            f"rho needs to be greater than {rho_lb} in"
-            f" {self.__class__.__name__}; now it is {rho}"
-        )
+        if rho <= rho_lb:
+            raise ValueError(
+                f"rho needs to be greater than {rho_lb} in"
+                f" {self.__class__.__name__}; now it is {rho}"
+            )
 
         if ctx.params.factor_sparsity and isinstance(
             self.factor_penalty, float
@@ -304,8 +307,6 @@ class SolrCMF(ADMM):
             ctx.params.alpha = 1e-3 * ctx.params.rho
         else:
             ctx.params.alpha = self.alpha
-
-        # print(f"alpha = {ctx.params['alpha']}")
 
         ctx.params.factor_pruning = self.factor_pruning
 
@@ -357,18 +358,20 @@ class SolrCMF(ADMM):
         # Initialize blocks and constraints
         if self.init == "random":
             init_fn = RandomInitializer(**init_kwargs)
-        elif self.init == "custom":
-            assert vs is not None and ds is not None, (
-                f"If 'init' is \"custom\" in {self.__class__.__name__} then"
-                " 'vs' and 'ds' need to be provided to method 'fit' as"
-                " keyword arguments."
-            )
-            if ctx.params.factor_sparsity or ctx.params.fixed_factor_pattern:
-                assert us is not None, (
-                    "If 'init' is \"custom\" in"
-                    f" {self.__class__.__name__} then 'us' needs to be"
-                    " provided to method 'fit' as a keyword argument."
+        else:  # self.init == "custom":
+            if vs is None or ds is None:
+                raise ValueError(
+                    f"If 'init' is \"custom\" in {self.__class__.__name__}"
+                    " then 'vs' and 'ds' need to be provided to method 'fit'"
+                    " as keyword arguments."
                 )
+            if ctx.params.factor_sparsity or ctx.params.fixed_factor_pattern:
+                if us is None:
+                    raise ValueError(
+                        f"If 'init' is \"custom\" in {self.__class__.__name__}"
+                        " then 'us' needs to be provided to method 'fit' as a"
+                        " keyword argument."
+                    )
 
             init_fn = FromFormerInitializer(
                 vs=vs,
@@ -382,7 +385,6 @@ class SolrCMF(ADMM):
 
         # Remove nan entries from `flat_indices` if indices provided.
         # Otherwise have non-nan indices as `flat_indices`
-        # ctx.params.flat_indices = {}
         for k, x in ctx.data.items():
             if indices is None:
                 ctx.params.flat_indices[k] = flatnonzero(logical_not(isnan(x)))
@@ -396,10 +398,12 @@ class SolrCMF(ADMM):
 
         return ctx
 
+    @override
     def transform(
         self,
         X: dict[ViewDesc, NDArray[float64]],
         y=None,
+        **kwargs,
     ):
         check_is_fitted(self)
 
@@ -408,11 +412,13 @@ class SolrCMF(ADMM):
             for k, d in self.ds_.items()
         }
 
+    @override
     def score(
         self,
         X: dict[ViewDesc, NDArray[float64]],
         *,
         indices: dict[ViewDesc, NDArray[intp]] | None = None,
+        **kwargs,
     ):
         check_is_fitted(self)
 
@@ -431,6 +437,7 @@ class SolrCMF(ADMM):
         else:
             return None
 
+    @override
     def _extra_attrs(
         self, ctx: Context[SolrCMFBlocks, SolrCMFConstraints, SolrCMFParams]
     ):
@@ -457,6 +464,31 @@ def _rho_lower_bound(
     min_vp_w: float | None = None,
     max_vp_w: float | None = None,
 ):
+    """Return the smallest rho that guarantees convergence of the ADMM iterates.
+
+    The bound is derived from Theorem 1 (main paper, Eq. 7) instantiated for
+    problem (P) in Supplementary Remark 1 (Eqs. 18-19).
+
+    Parameters
+    ----------
+    mu : float or None
+        The mu parameter that weights the ||V'_l - V_l||_F^2 slack terms.
+    min_vp_w : float or None
+        Smallest V'-slack weight across all views.
+    max_vp_w : float or None
+        Largest V'-slack weight across all views.
+
+    When none of the V'-slack variables are present (no factor sparsity / fixed
+    factor pattern), only the basic condition rho > 2 from Supplementary
+    Eq. (18) applies, so the bound reduces to 2.
+
+    When V'-slack variables are present the bound is (Supplementary Eq. (19)):
+        max(2,
+            2*mu*max_vp_w^2 / min_vp_w,
+            (1 + mu*max_vp_w) / 2 * (1 + 2*max_vp_w / min_vp_w)^2
+        )
+
+    """
     if mu is not None and min_vp_w is not None and max_vp_w is not None:
         return max(
             2.0,

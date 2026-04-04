@@ -83,7 +83,8 @@ def best_random_init(
             all solutions obtained from the `n_inits` random starting points.
 
     """
-    assert n_inits > 0, "'n_init' needs to be a positive integer"
+    if n_inits <= 0:
+        raise ValueError("'n_init' needs to be a positive integer")
 
     rng = default_rng(rng)
 
@@ -103,7 +104,7 @@ def best_random_init(
 
     ests_init: list[SolrCMF] = Parallel(n_jobs=n_jobs, return_as="list")(
         delayed(init_run)(xs, ri) for ri in rng_inits
-    )  # type: ignore
+    )
 
     best_obj = inf
 

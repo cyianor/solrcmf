@@ -1,4 +1,5 @@
 from numbers import Integral, Real
+from warnings import warn
 
 from numpy import (
     asarray,
@@ -42,6 +43,7 @@ class LowRankImputation(BaseEstimator):
         self.penalty = penalty
         self.max_rank = max_rank
         self.init = init
+        self.warm_start = warm_start
         self.max_iter = max_iter
         self.tol = tol
         self.random_state = random_state
@@ -56,14 +58,19 @@ class LowRankImputation(BaseEstimator):
             X, dtype=[float64, float32], force_all_finite="allow-nan"
         )
 
-        U, V = _initialize(
-            self.max_rank,
-            self.init,
-            self.random_state,
-            X,
-            U,
-            V,
-        )
+        if U is not None or V is not None:
+            if self.init != "custom":
+                warn(
+                    "When init!='custom', provided U or V are ignored. Set"
+                    " init='custom' to use them as initialization."
+                )
+
+        if self.warm_start and hasattr(self, "U_") and hasattr(self, "V_"):
+            U, V = _validate_init(X, self.U_, self.V_, self.max_rank)
+        elif self.init == "random":
+            U, V = _random_init(X, self.max_rank, self.random_state)
+        else:  # init == "custom"
+            U, V = _validate_init(X, U, V, self.max_rank)
 
         penalty = self.penalty
         max_iter = self.max_iter
@@ -114,23 +121,26 @@ class LowRankImputation(BaseEstimator):
         return self
 
 
-def _initialize(max_rank, init, random_state, X, U, V):
-    if init == "random":
-        rnd = check_random_state(random_state)
-        U = asarray(rnd.standard_normal((X.shape[0], max_rank)), dtype=X.dtype)
-        V = asarray(rnd.standard_normal((X.shape[1], max_rank)), dtype=X.dtype)
-    elif init == "custom":
-        U = check_array(U, dtype=X.dtype)
-        V = check_array(V, dtype=X.dtype)
-        assert U.shape == (X.shape[0], max_rank), (
-            "U in LowRankImputation.fit() must be a 2d-array of shape"
-            f" {(X.shape[0], max_rank)} "
-        )
-        assert V.shape == (X.shape[1], max_rank), (
-            "V in LowRankImputation.fit() must be a 2d-array of shape"
-            f" {(X.shape[1], max_rank)} "
-        )
+def _random_init(X, max_rank, random_state):
+    rnd = check_random_state(random_state)
+    U = asarray(rnd.standard_normal((X.shape[0], max_rank)), dtype=X.dtype)
+    V = asarray(rnd.standard_normal((X.shape[1], max_rank)), dtype=X.dtype)
+    return U, V
 
+
+def _validate_init(X, U, V, max_rank):
+    U = check_array(U, dtype=X.dtype)
+    V = check_array(V, dtype=X.dtype)
+    if U.shape != (X.shape[0], max_rank):
+        raise ValueError(
+            "U must be a 2d-array of shape"
+            f" {(X.shape[0], max_rank)}, got {U.shape}"
+        )
+    if V.shape != (X.shape[1], max_rank):
+        raise ValueError(
+            "V must be a 2d-array of shape"
+            f" {(X.shape[1], max_rank)}, got {V.shape}"
+        )
     return U, V
 
 

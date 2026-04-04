@@ -40,7 +40,7 @@ from .metrics import (
 from .solrcmf import SolrCMF
 from .splits import BaseSplitter, ElementwiseFolds
 
-InitsGeneratorType = Generator[
+type InitsGeneratorType = Generator[
     tuple[
         int,
         tuple[
@@ -155,24 +155,23 @@ class SolrCMFCV(BaseEstimator):
         )
 
         # Check that all are indeed 1d
-        assert (
+        if not (
             ndim(structure_penalty)
             == ndim(max_rank)
             == ndim(factor_penalty)
             == 1
-        ), (
-            f"In {self.__class__.__name__} arguments 'structure_penalty',"
-            " 'max_rank', and 'factor_penalty' need to be one-dimensional or"
-            " equal to a single number (or 'None' for 'factor_penalty')"
-        )
+        ):
+            raise ValueError(
+                f"In {self.__class__.__name__} arguments 'structure_penalty',"
+                " 'max_rank', and 'factor_penalty' need to be one-dimensional"
+                " or equal to a single number (or 'None' for 'factor_penalty')"
+            )
 
         structure_penalty, max_rank, factor_penalty = broadcast_arrays(
             structure_penalty, max_rank, factor_penalty
         )
 
         return list(zip(structure_penalty, max_rank, factor_penalty))
-
-    def _validate_params(self) -> None: ...
 
     def fit(
         self,
@@ -234,19 +233,20 @@ class SolrCMFCV(BaseEstimator):
             # If one of these is provided all need to be the same length
             # (if only vs and ds are provided then us is treated as
             # a list of None)
-            assert (
+            if not (
                 vs is not None and ds is not None and len(vs) == len(ds) >= 1
-            ), (
-                "If initial values are provided to"
-                f" {self.__class__.__name__}.fit(), then 'vs' and 'ds'"
-                " both need to provided and have to be the same length"
-            )
-
-            assert us is None or len(us) == len(vs), (
-                "If initial values for 'u' are provided to"
-                f" {self.__class__.__name__}.fit(), then 'us' needs to"
-                " have the same length as 'vs' and 'ds'"
-            )
+            ):
+                raise ValueError(
+                    "If initial values are provided to"
+                    f" {self.__class__.__name__}.fit(), then 'vs' and 'ds'"
+                    " both need to be provided and have to be the same length"
+                )
+            if us is not None and len(us) != len(vs):
+                raise ValueError(
+                    "If initial values for 'u' are provided to"
+                    f" {self.__class__.__name__}.fit(), then 'us' needs to"
+                    " have the same length as 'vs' and 'ds'"
+                )
 
             n_reps = len(vs)
 
@@ -292,8 +292,10 @@ class SolrCMFCV(BaseEstimator):
                 )
 
                 if est.init == "random":
-                    assert isinstance(est.init_kwargs, dict)  # type-checking
-                    est.init_kwargs["rng"] = default_rng(rng)
+                    est.init_kwargs = {
+                        **est.init_kwargs,
+                        "rng": default_rng(rng),
+                    }
 
                 est.fit(
                     X,
@@ -522,7 +524,10 @@ class SolrCMFCV(BaseEstimator):
                 )
 
                 if est.init == "random":
-                    est.init_kwargs["rng"] = default_rng(rng)
+                    est.init_kwargs = {
+                        **est.init_kwargs,
+                        "rng": default_rng(rng),
+                    }
 
                 est.fit(
                     X,

@@ -11,7 +11,7 @@ from sklearn.utils._param_validation import Interval
 from .base import Block, BlockDesc, Constraint, Context
 
 
-class ADMM(BaseEstimator, ABC):
+class ADMM[BT, CT, PT](BaseEstimator, ABC):
     """Base class for ADMM algorithms."""
 
     _parameter_constraints = {
@@ -46,7 +46,7 @@ class ADMM(BaseEstimator, ABC):
         self.save_ctx = save_ctx
 
     @abstractmethod
-    def _setup(self, X, **kwargs) -> Context:
+    def _setup(self, X, **kwargs) -> Context[BT, CT, PT]:
         """Set up the estimation problem.
 
         Called after data is available.
@@ -54,9 +54,6 @@ class ADMM(BaseEstimator, ABC):
         raise NotImplementedError(
             f"_setup method on {self.__class__.__name__} not implemented"
         )
-
-    # Type-stub
-    def _validate_params(self) -> None: ...
 
     def fit(self, X, y=None, **kwargs):
         # Validate parameters; should check parameters of
@@ -76,16 +73,12 @@ class ADMM(BaseEstimator, ABC):
         for i in range(self.max_iter):
             # Update variable blocks
             for name, idx in ctx.block_order:
-                bgroup: dict[BlockDesc, Block[Context, Any]] = getattr(
-                    ctx.blocks, name
-                )
+                bgroup = getattr(ctx.blocks, name)
                 bgroup[idx].update(ctx)
 
             # Update constraints
             for cnstrnt in fields(ctx.constraints):
-                cgroup: dict[BlockDesc, Constraint[Context, Any]] = getattr(
-                    ctx.constraints, cnstrnt.name
-                )
+                cgroup = getattr(ctx.constraints, cnstrnt.name)
                 for c in cgroup.values():
                     c.update(ctx)
 
@@ -95,7 +88,9 @@ class ADMM(BaseEstimator, ABC):
             objs.append(obj)
             gaps.append(gap)
 
-            if gap <= max(self.rel_tol * obj, self.abs_tol):
+            if i > 0 and abs(gap) <= max(
+                self.rel_tol * abs(obj_old), self.abs_tol
+            ):
                 converged = True
                 break
 
@@ -106,7 +101,7 @@ class ADMM(BaseEstimator, ABC):
         self.objs_ = objs
         self.gaps_ = gaps
         self.converged_ = converged
-        self.objective_value_ = obj
+        self.objective_value_ = objs[-1]
         self.n_iter_ = i + 1
         self.elapsed_process_time_ = end_time - start_time
 
@@ -118,29 +113,34 @@ class ADMM(BaseEstimator, ABC):
 
         return self
 
+    @abstractmethod
     def score(self, X, **kwargs):
         pass
 
+    @abstractmethod
     def transform(self, X, y=None, **kwargs):
         pass
 
-    def _extra_attrs(self, ctx: Context) -> dict[str, Any]:
+    def _extra_attrs(self, ctx: Context[BT, CT, PT]) -> dict[str, Any]:
         return {}
 
 
-def _objective(ctx: Context) -> float:
+def _objective[BT, CT, PT](ctx: Context[BT, CT, PT]) -> float:
     val = 0.0
 
     for name, idx in ctx.block_order:
-        bgroup: dict[BlockDesc, Block[Context, Any]] = getattr(
-            ctx.blocks, name
-        )
+        ctx.blocks
+        bgroup: dict[
+            BlockDesc,
+            Block[Context[BT, CT, PT], Any],
+        ] = getattr(ctx.blocks, name)
         val += bgroup[idx].objective(ctx)
 
     for cnstrnt in fields(ctx.constraints):
-        cgroup: dict[BlockDesc, Constraint[Context, Any]] = getattr(
-            ctx.constraints, cnstrnt.name
-        )
+        cgroup: dict[
+            BlockDesc,
+            Constraint[Context[BT, CT, PT], Any],
+        ] = getattr(ctx.constraints, cnstrnt.name)
         for c in cgroup.values():
             val += c.objective(ctx)
 
