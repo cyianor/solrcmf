@@ -45,9 +45,13 @@ plugins:
 - mkdocstrings:
     handlers:
       python:
+        import:
+        - https://docs.python.org/3/objects.inv
         options:
           docstring_style: google
           show_bases: false
+          show_root_heading: true
+          heading_level: 4
           summary: true
 - mkdocs-jupyter:
     include_source: True

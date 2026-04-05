@@ -7,33 +7,24 @@
 
 ## Main method
 
-### SolrCMF
 ::: solrcmf.SolrCMF
 
 ## Hyperparameter selection
 
-### ElementwiseFolds
 ::: solrcmf.ElementwiseFolds
-### SolrCMFCV
 ::: solrcmf.SolrCMFCV
 
-## Intialization
+## Initialization
 
-### multiview_init
 ::: solrcmf.multiview_init
-### best_random_init
 ::: solrcmf.best_random_init
 
 ## Synthetic data generation
 
-### simulate
-::: solrcmf.simulate.simulate
+::: solrcmf.simulate
 
-## Auxillary methods
+## Auxiliary methods
 
-### LowRankImputation
 ::: solrcmf.LowRankImputation
-### bicenter
 ::: solrcmf.bicenter
-### nanscale
 ::: solrcmf.nanscale

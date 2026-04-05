@@ -1,5 +1,7 @@
 # Overview
 
+**DOCUMENTATION UNDER CONSTRUCTION**
+
 Matrix decomposition techniques are well-established and widely used for
 decades and common examples for decomposing a single matrix are the
 [Eigendecomposition](https://en.wikipedia.org/wiki/Eigendecomposition_of_a_matrix),
@@ -10,7 +12,12 @@ or [Non-negative Matrix Factorization (NMF)](https://en.wikipedia.org/wiki/Non-n
 
 ## Integrated matrix decomposition
 
-Decomposing a single matrix can be very valueable to learn 
+Decomposing a single matrix can be very valuable to learn the underlying
+structure of a data source. However, often multiple data sources describing
+different properties on the same set of entities are available. Integrated
+matrix decomposition makes use of these overlapping sets of entities
+and aims to reveal more interesting aspects in a decomposition of data
+sources than single matrix decomposition would be capable of.
 
 ## Layout description
 
@@ -65,11 +72,11 @@ of a view relationship.
 ///
 
 /// warning | Important
-Strings and integers can be used to represent views. Is is important
+Strings and integers can be used to represent views. It is important
 that every appearance of view `0`, say, represents the same view, no matter at
 which position in the `ViewDesc` tuple it appears. For example, in `(0, 1)` and
 `(5, 0)` the `0` represents the same view within a data layout.
-This allows, e.g. for a view to appear in the rows of one data source,
+This allows, e.g., for a view to appear in the rows of one data source,
 but in the columns of another.
 ///
 

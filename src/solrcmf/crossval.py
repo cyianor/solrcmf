@@ -276,7 +276,7 @@ class SolrCMFCV(BaseEstimator):
         vs: list[dict[Entity, NDArray[float64]]] | None = None,
         ds: list[dict[ViewDesc, NDArray[float64]]] | None = None,
         us: list[dict[Entity, NDArray[float64]]] | None = None,
-    ):
+    ) -> "SolrCMFCV":
         """Cross-validate the parameter grid and refit on the best combination.
 
         Args:

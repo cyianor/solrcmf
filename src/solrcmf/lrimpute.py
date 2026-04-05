@@ -93,7 +93,7 @@ class LowRankImputation(BaseEstimator):
     def _more_tags(self):
         return {"allow_nan": True}
 
-    def fit(self, X, y=None, *, U=None, V=None):
+    def fit(self, X, y=None, *, U=None, V=None) -> "LowRankImputation":
         """Fit the low-rank factorisation to X.
 
         Args:
