@@ -36,6 +36,7 @@ dev = [
     "mkdocstrings[python]>=0.30.0",
     "pandas>=2.3.2",
     "pytest>=8.4.2",
+    "ruff>=0.15.9",
     "ty>=0.0.28",
 ]
 
