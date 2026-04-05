@@ -1,3 +1,10 @@
+"""Tools for low-rank imputation.
+
+This module provides functionality to compute estimates to single
+matrices with missing values under a low-rank assumption. This can
+be used to impute the missing values.
+"""
+
 from numbers import Integral, Real
 from warnings import warn
 
@@ -19,6 +26,24 @@ from sklearn.utils.validation import check_array, check_random_state
 
 
 class LowRankImputation(BaseEstimator):
+    """Low-rank matrix imputation via alternating ridge regression.
+
+    Factorises an incomplete matrix X as U @ V.T, where U and V are
+    estimated by alternating ridge regression on the observed entries.
+    Missing values (NaN) are excluded from all computations and can be
+    recovered from the fitted factors via U_ @ V_.T.
+
+    Attributes:
+        U_ (NDArray[float64]): Left factor matrix of shape
+            (n_samples, max_rank).
+        V_ (NDArray[float64]): Right factor matrix of shape
+            (n_features, max_rank).
+        converged_ (bool): Whether the convergence criterion was met.
+        n_iter_ (int): Number of iterations performed.
+        loss_ (float): Final objective value.
+
+    """
+
     _parameter_constraints = {
         "penalty": [Interval(Real, 0, None, closed="left")],
         "max_rank": [Interval(Integral, 1, None, closed="left")],
@@ -40,6 +65,23 @@ class LowRankImputation(BaseEstimator):
         tol: float = 1e-6,
         random_state: int | RandomState | None = None,
     ):
+        """Initialize LowRankImputation.
+
+        Args:
+            penalty: Ridge regularisation weight applied to both U and V.
+            max_rank: Number of latent factors.
+            init: Initialisation strategy. "random" draws U and V from a
+                standard normal distribution; "custom" uses the U and V
+                provided to fit.
+            warm_start: If True, reuse U_ and V_ from a previous fit as the
+                starting point instead of reinitialising.
+            max_iter: Maximum number of alternating update iterations.
+            tol: Convergence tolerance; stops when the relative decrease in
+                loss falls below tol.
+            random_state: Seed or RandomState instance for reproducible random
+                initialisation.
+
+        """
         self.penalty = penalty
         self.max_rank = max_rank
         self.init = init
@@ -52,6 +94,21 @@ class LowRankImputation(BaseEstimator):
         return {"allow_nan": True}
 
     def fit(self, X, y=None, *, U=None, V=None):
+        """Fit the low-rank factorisation to X.
+
+        Args:
+            X: Input matrix of shape (n_samples, n_features), possibly
+                containing NaN for missing entries.
+            y: Ignored.
+            U: Initial left factor matrix of shape (n_samples, max_rank).
+                Used when init='custom' or warm_start=True.
+            V: Initial right factor matrix of shape (n_features, max_rank).
+                Used when init='custom' or warm_start=True.
+
+        Returns:
+            self
+
+        """
         self._validate_params()
 
         X = check_array(
@@ -122,6 +179,7 @@ class LowRankImputation(BaseEstimator):
 
 
 def _random_init(X, max_rank, random_state):
+    """Return randomly initialised factor matrices matching X's dtype."""
     rnd = check_random_state(random_state)
     U = asarray(rnd.standard_normal((X.shape[0], max_rank)), dtype=X.dtype)
     V = asarray(rnd.standard_normal((X.shape[1], max_rank)), dtype=X.dtype)
@@ -129,6 +187,7 @@ def _random_init(X, max_rank, random_state):
 
 
 def _validate_init(X, U, V, max_rank):
+    """Validate and cast U and V to X's dtype, raising on shape mismatch."""
     U = check_array(U, dtype=X.dtype)
     V = check_array(V, dtype=X.dtype)
     if U.shape != (X.shape[0], max_rank):
@@ -145,6 +204,10 @@ def _validate_init(X, U, V, max_rank):
 
 
 def _compute_loss(X, U, V, penalty) -> float:
+    """Return 0.5 * (||X - U V^T||_F^2 + penalty * (||U||_F^2 + ||V||_F^2)).
+
+    Missing entries in X (NaN) are excluded from the reconstruction term.
+    """
     return 0.5 * (
         nansum((X - U @ V.T) ** 2)
         + penalty * (U**2).sum()

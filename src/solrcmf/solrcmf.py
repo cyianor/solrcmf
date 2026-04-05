@@ -1,3 +1,10 @@
+"""Implementation of the SolrCMF algorithm.
+
+This class constructs the specific SolrCMF problem by using the
+building blocks defined in blocks.py. The basic iterative loop
+is performed by its base class ADMM.
+"""
+
 from numbers import Integral, Real
 from typing import Any, override
 from warnings import warn
@@ -38,10 +45,41 @@ from .metrics import neg_mean_squared_error
 
 
 class SolrCMF(ADMM[SolrCMFBlocks, SolrCMFConstraints, SolrCMFParams]):
-    """Sparse orthgonal low-rank Collective Matrix Factorization.
+    """Sparse Orthogonal Low-rank Collective Matrix Factorization (SolrCMF).
 
-    Implements sparse orthogonal low-rank Collective Matrix Factorization
-    (solrCMF).
+    Jointly factorises a collection of data matrices X[k], one per view
+    pair k = (i, j, ...), as
+
+        X[k] ≈ V[i] diag(d[k]) V[j]^T
+
+    where V[i] and V[j] are column-orthonormal factor matrices shared
+    across all data matrices that involve view i or j, and d[k] is a
+    vector of per-factor signal strengths for the view pair k.
+
+    Structure sparsity is imposed on d[k] via an L1 penalty (controlled
+    by `structure_penalty`), causing factors that carry no signal for a
+    given view pair to be zeroed out. Optionally, factor-level sparsity
+    in the loadings can be imposed on a sparse auxiliary variable U via a
+    second L1 penalty (`factor_penalty`). Globally inactive factors
+    (zero in every d[k]) can be pruned during fitting when
+    `factor_pruning=True`.
+
+    The problem is solved by multi-block ADMM. The algorithm alternates
+    between closed-form updates for Z (data fidelity), D (soft-
+    thresholding), V (Procrustes / SVD), and optionally U and V'
+    (factor sparsity), followed by dual ascent steps for the multipliers.
+
+    Attributes:
+        vs_ (dict[Entity, NDArray[float64]]): Fitted orthonormal factor
+            matrices, one per view.
+        ds_ (dict[ViewDesc, NDArray[float64]]): Fitted scaling vectors, one per
+            view pair.
+        us_ (dict[Entity, NDArray[float64]]): Fitted sparse loading matrices,
+            one per view. Only present when `factor_penalty` is set or
+            `factor_pattern` is provided.
+        est_max_rank_ (int): Effective rank after fitting (number of globally
+            active factors).
+
     """
 
     vs_: dict[Entity, NDArray[float64]]
@@ -79,6 +117,38 @@ class SolrCMF(ADMM[SolrCMFBlocks, SolrCMFConstraints, SolrCMFParams]):
         rel_tol: float = 1e-6,
         save_ctx: bool = False,
     ):
+        """Initialize SolrCMF.
+
+        Args:
+            structure_penalty: L1 penalty weight on the scaling vectors d[k].
+                Larger values produce sparser structure patterns. Mutually
+                exclusive with providing `structure_pattern` in `fit`.
+            max_rank: Maximum number of factors. Mutually exclusive with
+                providing `structure_pattern` in `fit`.
+            factor_penalty: L1 penalty weight on the sparse factor loadings U.
+                If None, no factor sparsity is imposed. Mutually exclusive with
+                providing `factor_pattern` in `fit`.
+            factor_pruning: If True, globally inactive factors (zero in all
+                d[k]) are removed from all blocks during fitting, reducing the
+                effective rank over time.
+            init: Initialisation strategy. "random" draws V from the Stiefel
+                manifold; "custom" uses factor matrices provided via the `vs`
+                and `ds` arguments of `fit`.
+            init_kwargs: Additional keyword arguments for the initialiser. For
+                "random" init, supports "rng" (int or Generator) for
+                reproducibility and "repetitions" (int) for multiple restarts.
+            rho: ADMM penalty parameter. If None, a lower bound derived from
+                the problem structure is used.
+            alpha: Ridge regularisation weight on V. Defaults to 1e-3 * rho.
+            mu: Weight for the V' slack penalty. Defaults to 10.0 when factor
+                sparsity or a fixed factor pattern is used.
+            max_iter: Maximum number of ADMM iterations.
+            abs_tol: Absolute convergence tolerance on the objective change.
+            rel_tol: Relative convergence tolerance on the objective change.
+            save_ctx: If True, the full ADMM context is stored as `ctx_` after
+                fitting.
+
+        """
         super().__init__(
             max_iter=max_iter,
             abs_tol=abs_tol,
@@ -424,11 +494,16 @@ class SolrCMF(ADMM[SolrCMFBlocks, SolrCMFConstraints, SolrCMFParams]):
         return neg_mean_squared_error(X, self.transform(X), indices=indices)
 
     def structure_pattern(self):
+        """Return the structure pattern of the fitted solution."""
         check_is_fitted(self)
 
         return {k: d != 0.0 for k, d in self.ds_.items()}
 
-    def factor_pattern(self):
+    def factor_pattern(self) -> dict[Entity, bool] | None:
+        """Return the factor pattern of the fitted solution.
+
+        Returns None if factor sparsity was not computed.
+        """
         check_is_fitted(self)
 
         if hasattr(self, "us_"):
@@ -463,19 +538,10 @@ def _rho_lower_bound(
     min_vp_w: float | None = None,
     max_vp_w: float | None = None,
 ):
-    """Return the smallest rho that guarantees convergence of the ADMM iterates.
+    """Return smallest rho that guarantees convergence of the ADMM iterates.
 
     The bound is derived from Theorem 1 (main paper, Eq. 7) instantiated for
     problem (P) in Supplementary Remark 1 (Eqs. 18-19).
-
-    Parameters
-    ----------
-    mu : float or None
-        The mu parameter that weights the ||V'_l - V_l||_F^2 slack terms.
-    min_vp_w : float or None
-        Smallest V'-slack weight across all views.
-    max_vp_w : float or None
-        Largest V'-slack weight across all views.
 
     When none of the V'-slack variables are present (no factor sparsity / fixed
     factor pattern), only the basic condition rho > 2 from Supplementary
@@ -486,6 +552,12 @@ def _rho_lower_bound(
             2*mu*max_vp_w^2 / min_vp_w,
             (1 + mu*max_vp_w) / 2 * (1 + 2*max_vp_w / min_vp_w)^2
         )
+
+    Args:
+        mu (float or None): The mu parameter that weights the
+            ||V'_l - V_l||_F^2 slack terms.
+        min_vp_w (float or None): Smallest V'-slack weight across all views.
+        max_vp_w (float or None): Largest V'-slack weight across all views.
 
     """
     if mu is not None and min_vp_w is not None and max_vp_w is not None:

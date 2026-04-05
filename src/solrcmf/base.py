@@ -1,3 +1,16 @@
+"""Basic building blocks used in multi-block ADMM.
+
+This module contains the basic building blocks such as Block,
+Constraint, or Context which are used in multi-block ADMM algorithms.
+
+Note that blocks require the implementation of the `singledispatch`
+methods `update` and `objective`, whereas constraints require
+implementation of the `singledispatch` function `constraint`.
+
+Pre-defined functionality is purposefully generic to allow
+implementation of any multi-block ADMM algorithm using this framework.
+"""
+
 from __future__ import annotations
 
 from dataclasses import Field, dataclass, field

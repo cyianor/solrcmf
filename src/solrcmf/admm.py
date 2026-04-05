@@ -1,3 +1,11 @@
+"""Generic multi-block ADMM functionality.
+
+This module provides a class that can be used as a generic base class
+for a multi-block ADMM algorithm. It implements the basic machinery
+necessary to run the algorithm and relies on the building blocks
+defined in base.py.
+"""
+
 from abc import ABC, abstractmethod
 from dataclasses import fields
 from numbers import Integral, Real
@@ -40,14 +48,16 @@ class ADMM[
     skipping the first iteration to avoid spurious convergence from the
     initialisation.
 
-    Attributes set after `fit`:
-        objs_: Objective value at each iteration.
-        gaps_: Change in objective (obj_old - obj) at each iteration.
-        converged_: Whether the convergence criterion was met.
-        objective_value_: Final objective value.
-        n_iter_: Number of iterations performed.
-        elapsed_process_time_: CPU time consumed by the iteration loop.
-        ctx_: The context object (only when save_ctx=True).
+    Attributes:
+        objs_ (list[float]): Objective value at each iteration.
+        gaps_ (list[float]): Change in objective (obj_old - obj) at each
+            iteration.
+        converged_ (bool): Whether the convergence criterion was met.
+        objective_value_ (float): Final objective value.
+        n_iter_ (int): Number of iterations performed.
+        elapsed_process_time_ (float): CPU time consumed by the iteration loop.
+        ctx_ (Context): The context object (only when save_ctx=True).
+
     """
 
     _parameter_constraints = {

@@ -34,6 +34,12 @@ class RandomInitializer:
     """
 
     def __init__(self, rng: Generator | None = None):
+        """Initialize a new RandomInitializer.
+
+        Args:
+            rng: An instance of `numpy.random.Generator`
+
+        """
         if rng is None:
             rng = default_rng()
 
@@ -42,6 +48,12 @@ class RandomInitializer:
     def __call__(
         self, ctx: Context[SolrCMFBlocks, SolrCMFConstraints, SolrCMFParams]
     ):
+        """Generate random initial values for the SolrCMF problem.
+
+        Args:
+            ctx: a context for the SolrCMF problem.
+
+        """
         for v in ctx.blocks.v.keys():
             ctx.blocks.v[v].value = qr(
                 self.rng.standard_normal(ctx.blocks.v[v].shape)
@@ -99,6 +111,19 @@ class FromFormerInitializer:
         us: dict[Entity, NDArray[float64]] | None = None,
         reduce_max_rank: bool = False,
     ):
+        """Initialize a new FromFormerInitializer.
+
+        Args:
+            vs: Factor matrices from a previous fit, one per view.
+            ds: Scaling vectors from a previous fit, one per view pair.
+            us: Sparse loading matrices from a previous fit, one per view.
+                Required when the new problem uses factor sparsity or a fixed
+                factor pattern.
+            reduce_max_rank: If True, the effective rank is reduced to the
+                number of globally active factors in the former solution (those
+                non-zero in at least one d[k]) before copying the values.
+
+        """
         self.vs = vs
         self.ds = ds
         self.us = us
@@ -107,6 +132,12 @@ class FromFormerInitializer:
     def __call__(
         self, ctx: Context[SolrCMFBlocks, SolrCMFConstraints, SolrCMFParams]
     ):
+        """Copy initial values from a previous solution.
+
+        Args:
+            ctx: a context for the current SolrCMF problem.
+
+        """
         if self.reduce_max_rank:
             if ctx.params.fixed_factor_pattern:
                 # if "structure_pattern" in ctx.params:

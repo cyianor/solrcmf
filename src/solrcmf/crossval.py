@@ -1,3 +1,10 @@
+"""Cross-validate parameter grids and find best SolrCMF solution.
+
+This module contains functionality for performing cross-validation (CV) across
+parameter grids for the SolrCMF problem. CV is performed in parallel across
+independent parameter combinations.
+"""
+
 from numbers import Integral, Real
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -55,6 +62,58 @@ type InitsGeneratorType = Generator[
 
 
 class SolrCMFCV(BaseEstimator):
+    """Cross-validated hyperparameter selection for SolrCMF.
+
+    Fits SolrCMF over a grid of `structure_penalty`, `max_rank`, and
+    `factor_penalty` values, selects the best combination by
+    cross-validation, and refits on the full data.
+
+    Two cross-validation strategies are supported.
+    "structure_first_debiased_cv" first estimates the structure pattern on
+    the full data for each parameter combination, then cross-validates a
+    debiased (unpenalized) refit using that fixed pattern. "penalized_cv"
+    cross-validates the full penalized estimation directly on held-out entries.
+
+    Attributes:
+        cv_results_ (dict[str, list]): Per-parameter-combination diagnostics.
+            Each list has one entry per parameter combination. Keys:
+
+            - "structure_penalty", "max_rank", "factor_penalty":
+              the parameter values for each combination.
+            - "<score>_fold<i>": held-out score on fold i, where
+              <score> is the chosen scoring function.
+            - "mean_<score>", "std_<score>": mean and standard
+              deviation of the per-fold scores across folds.
+            - "est_max_rank": effective rank of the best run.
+            - "structural_zeros": number of zero entries in d[k] summed
+              over all view pairs (proxy for structure sparsity).
+            - "factor_zeros": number of zero entries in U summed over all
+              views (proxy for factor sparsity).
+
+            Additional keys for cv_strategy="structure_first_debiased_cv":
+
+            - "objective_value_penalized": objective of the penalized fit.
+            - "mean_elapsed_process_time_penalized",
+              "std_elapsed_process_time_penalized": CPU time statistics
+              for the penalized structure estimation step.
+            - "mean_elapsed_process_time_fixed",
+              "std_elapsed_process_time_fixed": CPU time statistics for
+              the debiased cross-validation step.
+
+            Additional keys for cv_strategy="penalized_cv":
+
+            - "mean_elapsed_process_time",
+              "std_elapsed_process_time": CPU time statistics across all
+              penalized CV fits.
+        best_index_ (int): Index into cv_results_ of the selected parameter
+            combination.
+        best_estimator_ (SolrCMF): Estimator refit on all data with the
+            selected parameters.
+        best_max_rank_ (int): Effective rank of the best estimator after
+            fitting.
+
+    """
+
     _parameter_constraints = {
         "structure_penalty": [
             Interval(Real, 0, None, closed="left"),
@@ -124,6 +183,38 @@ class SolrCMFCV(BaseEstimator):
         verbose: bool = False,
         n_jobs: int | None = None,
     ):
+        """Initialize SolrCMFCV.
+
+        Args:
+            structure_penalty: L1 penalty weight on d[k], or an array-like of
+                values to search over.
+            max_rank: Maximum number of factors, or an array-like of values to
+                search over.
+            factor_penalty: L1 penalty weight on sparse factor loadings U, or
+                an array-like of values to search over. `None` disables factor
+                sparsity.
+            factor_pruning: Whether to prune globally inactive factors during
+                fitting.
+            cv: Number of cross-validation folds, or a BaseSplitter instance.
+            cv_strategy: Cross-validation strategy. See class docstring.
+            score: Scoring function used to evaluate held-out predictions.
+            refit: Strategy for selecting and refitting the final estimator.
+                Prefix "mean" selects by mean CV score; "1se" applies the
+                one-standard-error rule. Suffix "debiased" refits without
+                penalty using the estimated structure pattern; "penalized"
+                refits with the full penalty.
+            init: Initialisation strategy passed to each SolrCMF fit.
+            init_kwargs: Additional keyword arguments for the initialiser.
+            rho: ADMM penalty parameter passed to each SolrCMF fit.
+            alpha: Ridge regularisation weight on V passed to each SolrCMF fit.
+            mu: V'-slack penalty weight passed to each SolrCMF fit.
+            max_iter: Maximum number of ADMM iterations per fit.
+            abs_tol: Absolute convergence tolerance per fit.
+            rel_tol: Relative convergence tolerance per fit.
+            verbose: Whether to print progress messages during fitting.
+            n_jobs: Number of parallel jobs. Passed to joblib.Parallel.
+
+        """
         self.structure_penalty = structure_penalty
         self.max_rank = max_rank
         self.factor_penalty = factor_penalty
@@ -186,6 +277,27 @@ class SolrCMFCV(BaseEstimator):
         ds: list[dict[ViewDesc, NDArray[float64]]] | None = None,
         us: list[dict[Entity, NDArray[float64]]] | None = None,
     ):
+        """Cross-validate the parameter grid and refit on the best combination.
+
+        Args:
+            X: Data matrices, one per view pair.
+            y: Ignored.
+            structure_weights: Per-element L1 weights on d[k], one array per
+                view pair. Passed through to each SolrCMF fit.
+            factor_weights: Per-element L1 weights on U, one array per view.
+                Passed through to each SolrCMF fit.
+            vs: List of initial factor matrices, one dict per repetition.
+                Required when init="custom".
+            ds: List of initial scaling vectors, one dict per repetition.
+                Required when init="custom".
+            us: List of initial sparse loading matrices, one dict per
+                repetition. Required when init="custom" and factor sparsity
+                is used.
+
+        Returns:
+            self
+
+        """
         self._validate_params()
 
         parameter_grid = self._check_parameter_grid()
@@ -588,9 +700,7 @@ class SolrCMFCV(BaseEstimator):
             if self.init == "random":
                 # We need to split the randomness for random initialization
                 child_states = reshape(
-                    rng.bit_generator.spawn(
-                        n_reps * n_params * n_folds
-                    ),
+                    rng.bit_generator.spawn(n_reps * n_params * n_folds),
                     (n_params, n_reps, n_folds),
                 )
             else:

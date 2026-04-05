@@ -1,3 +1,5 @@
+"""Metrics to assess data fidelity of a multi-matrix estimate."""
+
 from numpy import float64, intp, isnan, logical_not, nansum, nanvar, sum
 from numpy.typing import NDArray
 
@@ -9,7 +11,21 @@ def neg_mean_squared_error(
     xhats: dict[ViewDesc, NDArray[float64]],
     *,
     indices: dict[ViewDesc, NDArray[intp]] | None = None,
-):
+) -> float:
+    """Compute the negative Mean-Squared-Error (MSE).
+
+    nan-values are ignored during computations.
+
+    Args:
+        xs: ground-truth data
+        xhats: estimate containing same entries as `xs` with matching shapes
+        indices: indices into `xs` and `xhats`. If provided, the negative MSE
+            is only computed on these indices.
+
+    Returns:
+        the negative MSE
+
+    """
     if indices is None:
         n_sums = [
             (sum(logical_not(isnan(xs[k]))), nansum((xs[k] - xhat) ** 2))
@@ -32,7 +48,24 @@ def weighted_neg_mean_squared_error(
     xhats: dict[ViewDesc, NDArray[float64]],
     *,
     indices: dict[ViewDesc, NDArray[intp]] | None = None,
-):
+) -> float:
+    """Compute the weighted negative Mean-Squared-Error (MSE).
+
+    The squared error between matching arrays in `xs` and `xhats` is
+    weighted by the variance of the entries in `xs`.
+
+    nan-values are ignored during computations.
+
+    Args:
+        xs: ground-truth data
+        xhats: estimate containing same entries as `xs` with matching shapes
+        indices: indices into `xs` and `xhats`. If provided, the negative MSE
+            is only computed on these indices.
+
+    Returns:
+        the negative MSE
+
+    """
     if indices is None:
         sums = [
             nansum((xs[k] - xhat) ** 2) / nanvar(xs[k])
@@ -53,7 +86,21 @@ def neg_sum_squared_error(
     xhats: dict[ViewDesc, NDArray[float64]],
     *,
     indices: dict[ViewDesc, NDArray[intp]] | None = None,
-):
+) -> float:
+    """Compute the negative squared error.
+
+    nan-values are ignored during computations.
+
+    Args:
+        xs: ground-truth data
+        xhats: estimate containing same entries as `xs` with matching shapes
+        indices: indices into `xs` and `xhats`. If provided, the negative MSE
+            is only computed on these indices.
+
+    Returns:
+        the negative squared error
+
+    """
     if indices is None:
         sums = [nansum((xs[k] - xhat) ** 2) for k, xhat in xhats.items()]
     else:

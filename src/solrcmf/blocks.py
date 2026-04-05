@@ -1,3 +1,11 @@
+"""ADMM blocks and constraints.
+
+This module contains a collection of blocks and constraints that are
+used by the SolrCMF algorithm. In addition, it defines the block,
+constraint, and parameter types used in the SolrCMF class and
+throughout all blocks.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -33,6 +41,8 @@ from .base import (
 
 @dataclass
 class SolrCMFBlocks:
+    """Primal variable blocks for the SolrCMF problem."""
+
     z: dict[ViewDesc, ZBlock] = field(default_factory=dict)
     d: dict[ViewDesc, DBlock] = field(default_factory=dict)
     v: dict[Entity, VBlock] = field(default_factory=dict)
@@ -42,6 +52,8 @@ class SolrCMFBlocks:
 
 @dataclass
 class SolrCMFConstraints:
+    """Dual variable blocks/constraints for the SolrCMF problem."""
+
     factor: dict[Entity, FactorConstraint] = field(default_factory=dict)
     mean_structure: dict[ViewDesc, MeanStructureConstraint] = field(
         default_factory=dict
@@ -50,6 +62,8 @@ class SolrCMFConstraints:
 
 @dataclass
 class SolrCMFParams:
+    """Parameters used in the SolrCMF objective or the ADMM algorithm."""
+
     rho: float = 0.0
     alpha: float = 0.0
     flat_indices: dict[ViewDesc, NDArray[intp]] = field(default_factory=dict)
