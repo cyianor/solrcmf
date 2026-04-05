@@ -4,7 +4,7 @@ This is a package describing the data integration methodology from ["Sparse and 
 
 To install the package run
 ```sh
-pip install git+https://github.com/cyianor/solrcmf.git
+pip install solrcmf
 ```
 
 A simple usage example is shown below:
