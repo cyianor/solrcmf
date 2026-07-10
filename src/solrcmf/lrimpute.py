@@ -22,7 +22,11 @@ from numpy.linalg import solve
 from numpy.random import RandomState
 from sklearn.base import BaseEstimator
 from sklearn.utils._param_validation import Interval, StrOptions
-from sklearn.utils.validation import check_array, check_random_state
+from sklearn.utils.validation import (
+    check_array,
+    check_is_fitted,
+    check_random_state,
+)
 
 
 class LowRankImputation(BaseEstimator):
@@ -176,6 +180,37 @@ class LowRankImputation(BaseEstimator):
         self.loss_ = loss
 
         return self
+
+    def transform(self, X, y=None):
+        """Impute missing entries of X from the fitted factorisation.
+
+        Args:
+            X: Matrix of the same shape as the one passed to `fit`,
+                possibly containing NaN for missing entries.
+            y: Ignored.
+
+        Returns:
+            A copy of X in which missing entries are replaced by the
+            corresponding entries of `U_ @ V_.T`.
+
+        """
+        check_is_fitted(self)
+
+        X = check_array(
+            X, dtype=[float64, float32], ensure_all_finite="allow-nan"
+        )
+        expected_shape = (self.U_.shape[0], self.V_.shape[0])
+        if X.shape != expected_shape:
+            raise ValueError(
+                f"X must be a 2d-array of shape {expected_shape},"
+                f" got {X.shape}"
+            )
+
+        X = X.copy()
+        missing = isnan(X)
+        X[missing] = (self.U_ @ self.V_.T)[missing]
+
+        return X
 
 
 def _random_init(X, max_rank, random_state):

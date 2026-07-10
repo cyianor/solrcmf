@@ -137,3 +137,25 @@ def test_simulate_sparse():
                 f"vs[{v}] col {col}: expected ~{expected_nnz} non-zeros,"
                 f" got {nnz}"
             )
+
+
+def test_simulate_sparse_high_rank():
+    """Sparse factors remain orthonormal for more than two factors.
+
+    Regression test: a single masked Gram-Schmidt sweep left pairwise
+    inner products as large as ~0.1 for rank >= 3.
+    """
+    factor_scales: dict[ViewDesc, list[float]] = {
+        (0, 1): [1.0, 2.0, 3.0, 4.0, 5.0],
+        (0, 2): [5.0, 4.0, 3.0, 2.0, 1.0],
+    }
+    viewdims: dict[Entity, int] = {0: 50, 1: 60, 2: 70}
+    data = simulate(
+        viewdims=viewdims,
+        factor_scales=factor_scales,
+        factor_sparsity={0: 0.5, 1: 0.5, 2: 0.5},
+        rng=default_rng(42),
+    )
+
+    _check_output_structure(data, viewdims, factor_scales)
+    _check_orthonormality(data)

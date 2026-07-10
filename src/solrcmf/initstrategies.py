@@ -43,7 +43,7 @@ def multiview_init(
     else:
         raise ValueError("'xs' does not follow a multiview layout")
 
-    u, _, vt = svd(x_joint)
+    u, _, vt = svd(x_joint, full_matrices=False)
 
     vs = {layout[0][jx]: vt.T[:, :max_rank]}
 
@@ -84,7 +84,7 @@ def best_random_init(
 
     """
     if n_inits <= 0:
-        raise ValueError("'n_init' needs to be a positive integer")
+        raise ValueError("'n_inits' needs to be a positive integer")
 
     rng = default_rng(rng)
 

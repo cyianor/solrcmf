@@ -49,21 +49,23 @@ def weighted_neg_mean_squared_error(
     *,
     indices: dict[ViewDesc, NDArray[intp]] | None = None,
 ) -> float:
-    """Compute the weighted negative Mean-Squared-Error (MSE).
+    """Compute the variance-weighted negative sum of squared errors.
 
-    The squared error between matching arrays in `xs` and `xhats` is
-    weighted by the variance of the entries in `xs`.
+    For each matrix, the sum of squared errors between `xs[k]` and
+    `xhats[k]` is divided by the variance of the entries of `xs[k]`.
+    The weighted sums are added up across matrices; no division by the
+    number of entries takes place.
 
     nan-values are ignored during computations.
 
     Args:
         xs: ground-truth data
         xhats: estimate containing same entries as `xs` with matching shapes
-        indices: indices into `xs` and `xhats`. If provided, the negative MSE
+        indices: indices into `xs` and `xhats`. If provided, the error
             is only computed on these indices.
 
     Returns:
-        the negative MSE
+        the variance-weighted negative sum of squared errors
 
     """
     if indices is None:

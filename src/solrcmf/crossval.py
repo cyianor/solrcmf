@@ -325,7 +325,9 @@ class SolrCMFCV(BaseEstimator):
         if self.init_kwargs is None:
             init_kwargs = {}
         else:
-            init_kwargs = self.init_kwargs
+            # Copy so that popping CV-only keys below does not mutate the
+            # caller's dictionary.
+            init_kwargs = dict(self.init_kwargs)
 
         if self.init == "random":
             n_reps = 1
@@ -744,14 +746,14 @@ class SolrCMFCV(BaseEstimator):
                 results[f"{self.score}_fold{i}"] = [nan] * n_params
 
             best_runs = [-1] * n_params
-            best_score = [inf] * n_params
+            best_score = [-inf] * n_params
             for idx_params, scores_params in enumerate(
                 split(asarray(scores), n_params)
             ):
                 for idx_init, scores_inits in enumerate(
                     split(scores_params, n_reps)
                 ):
-                    if mean(scores_inits) < best_score[idx_params]:
+                    if mean(scores_inits) > best_score[idx_params]:
                         best_score[idx_params] = mean(scores_inits)
                         best_runs[idx_params] = idx_init
                         for i in range(n_folds):
