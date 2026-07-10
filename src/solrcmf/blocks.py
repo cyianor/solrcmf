@@ -109,17 +109,21 @@ class ZBlock(Block[ViewDesc]):
 @update.register
 def _(block: ZBlock, ctx: SolrCMFContext):
     """Proximal step blending observed data with the low-rank estimate."""
-    block.value = (1.0 - 1.0 / (1.0 + ctx.params.rho)) * (
-        (ctx.blocks.v[block.idx[0]].value * ctx.blocks.d[block.idx].value)
-        @ ctx.blocks.v[block.idx[1]].value.T
-        - ctx.constraints.mean_structure[block.idx].value
-    )
+    # Unobserved entries take the current estimate exactly; only observed
+    # entries are blended with the data. Applying the blend everywhere
+    # would treat missing entries as observed zeros and shrink the
+    # estimated signal proportionally to the fraction of missing data.
+    block.value = (
+        ctx.blocks.v[block.idx[0]].value * ctx.blocks.d[block.idx].value
+    ) @ ctx.blocks.v[block.idx[1]].value.T - ctx.constraints.mean_structure[
+        block.idx
+    ].value
 
-    block.value.flat[ctx.params.flat_indices[block.idx]] += (
-        1.0
-        / (1.0 + ctx.params.rho)
-        * ctx.data[block.idx].flat[ctx.params.flat_indices[block.idx]]
-    )
+    idx = ctx.params.flat_indices[block.idx]
+    block.value.flat[idx] = (
+        ctx.params.rho * block.value.flat[idx]
+        + ctx.data[block.idx].flat[idx]
+    ) / (1.0 + ctx.params.rho)
 
 
 @objective.register
@@ -211,10 +215,6 @@ def _(block: VBlock, ctx: SolrCMFContext):
         )
 
         if sum(active_factors) < ctx.params.max_rank:
-            # warn(
-            #     "Reducing dimension of integration problem to maximum"
-            #     f" rank {sum(active_factors)}"
-            # )
             for d in ctx.blocks.d.values():
                 d.value = d.value[active_factors]
             if any(
@@ -300,31 +300,27 @@ def _(block: UBlock, ctx: SolrCMFContext):
         m *= ctx.params.factor_pattern[block.idx]
     else:
         # Soft-thresholding
-        m = sign(m) * maximum(
-            abs(m)
-            - ctx.params.factor_penalty
+        threshold = (
+            ctx.params.factor_penalty
             * ctx.params.factor_weights[block.idx]
-            / ctx.params.rho,
-            0.0,
+            / ctx.params.rho
         )
+        m_pre = m
+        m = sign(m) * maximum(abs(m) - threshold, 0.0)
 
-        # Deal with edge cases
+        # Deal with edge cases: a column that is thresholded to zero
+        # entirely is replaced by a signed unit vector at the entry of the
+        # pre-threshold column that came closest to surviving.
         for i in (m == 0.0).all(0).nonzero()[0]:
             warn(
                 f"Edge case occurred in U subproblem for index {block.idx}"
-                f" - maximum value in m is {abs(m[:, i]).max()}"
+                f" - maximum value in m is {abs(m_pre[:, i]).max()}"
             )
-            tmp = (
-                -abs(m[:, i])
-                + ctx.params.factor_penalty
-                * ctx.params.factor_weights[block.idx]
-                / ctx.params.rho
-            )
-            idx = argmin(tmp)
-            sgn = sign(tmp[idx])
+            idx = argmin(-abs(m_pre[:, i]) + threshold)
+            sgn = sign(m_pre[idx, i])
             # Set to +/- unit vector
             m[:, i] = 0.0
-            m[idx, i] = sgn
+            m[idx, i] = sgn if sgn != 0.0 else 1.0
 
     # Column-normalize
     block.value = m / sqrt((m**2).sum(0))

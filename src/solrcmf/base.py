@@ -156,7 +156,11 @@ def constraint[
     )
 
 
-@update.register
+# The dispatch class is passed to `register` explicitly: inferring it
+# from the type hints would evaluate the stringified annotations, which
+# fails on Python 3.12 because the PEP 695 type parameters cannot be
+# resolved by `get_type_hints`.
+@update.register(Constraint)
 def _[
     BT: DataclassInstance,
     CT: DataclassInstance,
@@ -177,7 +181,8 @@ def objective[
     return 0.0
 
 
-@objective.register
+# Explicit dispatch class for the same Python 3.12 reason as above.
+@objective.register(Constraint)
 def _[
     BT: DataclassInstance,
     CT: DataclassInstance,

@@ -33,17 +33,15 @@ class RandomInitializer:
       are initialized to zero.
     """
 
-    def __init__(self, rng: Generator | None = None):
+    def __init__(self, rng: Generator | int | None = None):
         """Initialize a new RandomInitializer.
 
         Args:
-            rng: An instance of `numpy.random.Generator`
+            rng: An instance of `numpy.random.Generator`, an integer seed,
+                or `None` to use a freshly seeded default generator.
 
         """
-        if rng is None:
-            rng = default_rng()
-
-        self.rng = rng
+        self.rng = default_rng(rng)
 
     def __call__(
         self, ctx: Context[SolrCMFBlocks, SolrCMFConstraints, SolrCMFParams]
@@ -139,8 +137,7 @@ class FromFormerInitializer:
 
         """
         if self.reduce_max_rank:
-            if ctx.params.fixed_factor_pattern:
-                # if "structure_pattern" in ctx.params:
+            if ctx.params.fixed_structure_pattern:
                 structure_pattern = ctx.params.structure_pattern
             else:
                 structure_pattern = {k: d != 0.0 for k, d in self.ds.items()}
@@ -152,18 +149,17 @@ class FromFormerInitializer:
                 != 0
             )
 
-            if ctx.params.fixed_factor_pattern:
-                # if "structure_pattern" in ctx.params:
+            if ctx.params.fixed_structure_pattern:
                 ctx.params.structure_pattern = {
                     k: p[active_factors]
                     for k, p in ctx.params.structure_pattern.items()
                 }
-            if ctx.params.fixed_structure_pattern:
-                # if "factor_pattern" in ctx.params:
+            if ctx.params.fixed_factor_pattern:
                 ctx.params.factor_pattern = {
                     v: p[:, active_factors]
                     for v, p in ctx.params.factor_pattern.items()
                 }
+            ctx.params.max_rank = len(active_factors)
         else:
             active_factors = s_[:]
 
