@@ -234,6 +234,19 @@ class SolrCMFCV(BaseEstimator):
         self.verbose = verbose
         self.n_jobs = n_jobs
 
+    def __sklearn_tags__(self):
+        """Declare input expectations via the public tags API.
+
+        Like SolrCMF, the estimator consumes a dict of data matrices
+        instead of a single 2d array, and missing entries may be encoded
+        as NaN.
+        """
+        tags = super().__sklearn_tags__()
+        tags.input_tags.two_d_array = False
+        tags.input_tags.dict = True
+        tags.input_tags.allow_nan = True
+        return tags
+
     def _check_parameter_grid(self):
         if self.factor_penalty is None:
             factor_penalty = array([None])

@@ -534,10 +534,17 @@ class SolrCMF(ADMM[SolrCMFBlocks, SolrCMFConstraints, SolrCMFParams]):
 
         return out
 
-    def _more_tags(self):
-        return {
-            "X_types": "dict",
-        }
+    def __sklearn_tags__(self):
+        """Declare input expectations via the public tags API.
+
+        The estimator consumes a dict of data matrices instead of a
+        single 2d array, and missing entries may be encoded as NaN.
+        """
+        tags = super().__sklearn_tags__()
+        tags.input_tags.two_d_array = False
+        tags.input_tags.dict = True
+        tags.input_tags.allow_nan = True
+        return tags
 
 
 def _rho_lower_bound(

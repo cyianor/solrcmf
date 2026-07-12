@@ -94,8 +94,11 @@ class LowRankImputation(BaseEstimator):
         self.tol = tol
         self.random_state = random_state
 
-    def _more_tags(self):
-        return {"allow_nan": True}
+    def __sklearn_tags__(self):
+        """Declare that the estimator accepts NaN entries in X."""
+        tags = super().__sklearn_tags__()
+        tags.input_tags.allow_nan = True
+        return tags
 
     def fit(self, X, y=None, *, U=None, V=None) -> "LowRankImputation":
         """Fit the low-rank factorisation to X.
