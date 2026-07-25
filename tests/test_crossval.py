@@ -20,7 +20,7 @@ def _simdata(seed=0, snr=10.0):
 
 
 def test_custom_init_requires_vs_ds():
-    """SolrCMFCV with init='custom' raises ValueError when vs and ds are not provided."""
+    """Require vs and ds for custom CV initialization."""
     X = _simdata()["xs"]
     cv = SolrCMFCV(
         structure_penalty=0.1,
