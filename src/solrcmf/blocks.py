@@ -109,17 +109,17 @@ class ZBlock(Block[ViewDesc]):
 @update.register
 def _(block: ZBlock, ctx: SolrCMFContext):
     """Proximal step blending observed data with the low-rank estimate."""
-    block.value = (1.0 - 1.0 / (1.0 + ctx.params.rho)) * (
-        (ctx.blocks.v[block.idx[0]].value * ctx.blocks.d[block.idx].value)
-        @ ctx.blocks.v[block.idx[1]].value.T
-        - ctx.constraints.mean_structure[block.idx].value
-    )
+    block.value = (
+        ctx.blocks.v[block.idx[0]].value * ctx.blocks.d[block.idx].value
+    ) @ ctx.blocks.v[block.idx[1]].value.T - ctx.constraints.mean_structure[
+        block.idx
+    ].value
 
-    block.value.flat[ctx.params.flat_indices[block.idx]] += (
-        1.0
-        / (1.0 + ctx.params.rho)
-        * ctx.data[block.idx].flat[ctx.params.flat_indices[block.idx]]
-    )
+    observed = ctx.params.flat_indices[block.idx]
+    block.value.flat[observed] = (
+        ctx.params.rho * block.value.flat[observed]
+        + ctx.data[block.idx].flat[observed]
+    ) / (1.0 + ctx.params.rho)
 
 
 @objective.register
