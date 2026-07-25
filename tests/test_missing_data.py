@@ -48,8 +48,7 @@ def test_z_update_does_not_shrink_unobserved_entries(use_nan):
     expected = low_rank.copy()
     observed = ctx.params.flat_indices[(0, 1)]
     expected.flat[observed] = (
-        ctx.params.rho * low_rank.flat[observed]
-        + X[(0, 1)].flat[observed]
+        ctx.params.rho * low_rank.flat[observed] + X[(0, 1)].flat[observed]
     ) / (1.0 + ctx.params.rho)
 
     update(ctx.blocks.z[(0, 1)], ctx)
@@ -155,16 +154,14 @@ def test_missing_noisy_data_recovers_estimated_quantities():
         ),
     )
 
-    truth_d = np.concatenate(
-        [np.abs(d) for d in factor_scales.values()]
-    )
+    truth_d = np.concatenate([np.abs(d) for d in factor_scales.values()])
     estimated_d = np.concatenate(
         [np.abs(est.ds_[k][list(permutation)]) for k in factor_scales]
     )
     active = truth_d != 0.0
-    relative_d_error = norm(
-        estimated_d[active] - truth_d[active]
-    ) / norm(truth_d[active])
+    relative_d_error = norm(estimated_d[active] - truth_d[active]) / norm(
+        truth_d[active]
+    )
 
     minimum_factor_correlation = min(
         abs(
@@ -178,11 +175,7 @@ def test_missing_noisy_data_recovers_estimated_quantities():
     reconstructed = est.transform(X)
     heldout_relative_error = np.sqrt(
         sum(
-            norm(
-                (
-                    reconstructed[k] - simulated["xs_truth"][k]
-                )[heldout[k]]
-            )
+            norm((reconstructed[k] - simulated["xs_truth"][k])[heldout[k]])
             ** 2
             for k in factor_scales
         )
