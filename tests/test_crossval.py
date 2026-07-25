@@ -20,7 +20,7 @@ def _simdata(seed=0, snr=10.0):
 
 
 def test_custom_init_requires_vs_ds():
-    """SolrCMFCV with init='custom' raises ValueError when vs and ds are not provided."""
+    """SolrCMFCV with init='custom' requires vs and ds."""
     X = _simdata()["xs"]
     cv = SolrCMFCV(
         structure_penalty=0.1,
@@ -81,3 +81,23 @@ def test_cv_result_keys():
 
     assert "structure_penalty" in cv.cv_results_
     assert len(cv.cv_results_["structure_penalty"]) == 2
+
+
+def test_init_kwargs_not_mutated():
+    """SolrCMFCV.fit does not modify the user-provided init_kwargs."""
+    import warnings
+
+    X = _simdata()["xs"]
+    init_kwargs = {"rng": 0, "repetitions": 2}
+    cv = SolrCMFCV(
+        structure_penalty=0.1,
+        max_rank=2,
+        cv=2,
+        init_kwargs=init_kwargs,
+        max_iter=200,
+    )
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        cv.fit(X)
+
+    assert init_kwargs == {"rng": 0, "repetitions": 2}

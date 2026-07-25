@@ -234,6 +234,19 @@ class SolrCMFCV(BaseEstimator):
         self.verbose = verbose
         self.n_jobs = n_jobs
 
+    def __sklearn_tags__(self):
+        """Declare input expectations via the public tags API.
+
+        Like SolrCMF, the estimator consumes a dict of data matrices
+        instead of a single 2d array, and missing entries may be encoded
+        as NaN.
+        """
+        tags = super().__sklearn_tags__()
+        tags.input_tags.two_d_array = False
+        tags.input_tags.dict = True
+        tags.input_tags.allow_nan = True
+        return tags
+
     def _check_parameter_grid(self):
         if self.factor_penalty is None:
             factor_penalty = array([None])
@@ -325,7 +338,9 @@ class SolrCMFCV(BaseEstimator):
         if self.init_kwargs is None:
             init_kwargs = {}
         else:
-            init_kwargs = self.init_kwargs
+            # Copy so that popping CV-only keys below does not mutate the
+            # caller's dictionary.
+            init_kwargs = dict(self.init_kwargs)
 
         if self.init == "random":
             n_reps = 1
@@ -744,14 +759,14 @@ class SolrCMFCV(BaseEstimator):
                 results[f"{self.score}_fold{i}"] = [nan] * n_params
 
             best_runs = [-1] * n_params
-            best_score = [inf] * n_params
+            best_score = [-inf] * n_params
             for idx_params, scores_params in enumerate(
                 split(asarray(scores), n_params)
             ):
                 for idx_init, scores_inits in enumerate(
                     split(scores_params, n_reps)
                 ):
-                    if mean(scores_inits) < best_score[idx_params]:
+                    if mean(scores_inits) > best_score[idx_params]:
                         best_score[idx_params] = mean(scores_inits)
                         best_runs[idx_params] = idx_init
                         for i in range(n_folds):

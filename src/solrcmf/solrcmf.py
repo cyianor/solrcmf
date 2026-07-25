@@ -12,6 +12,7 @@ from warnings import warn
 from numpy import (
     bool_,
     flatnonzero,
+    float32,
     float64,
     intp,
     isnan,
@@ -136,7 +137,7 @@ class SolrCMF(ADMM[SolrCMFBlocks, SolrCMFConstraints, SolrCMFParams]):
                 and `ds` arguments of `fit`.
             init_kwargs: Additional keyword arguments for the initialiser. For
                 "random" init, supports "rng" (int or Generator) for
-                reproducibility and "repetitions" (int) for multiple restarts.
+                reproducibility.
             rho: ADMM penalty parameter. If None, a lower bound derived from
                 the problem structure is used.
             alpha: Ridge regularisation weight on V. Defaults to 1e-3 * rho.
@@ -189,8 +190,12 @@ class SolrCMF(ADMM[SolrCMFBlocks, SolrCMFConstraints, SolrCMFParams]):
         if not isinstance(X, dict):
             raise TypeError("'X' needs to be a dictionary of data matrices")
 
-        for x in X.values():
-            x = check_array(x, ensure_all_finite="allow-nan")
+        X = {
+            k: check_array(
+                x, dtype=[float64, float32], ensure_all_finite="allow-nan"
+            )
+            for k, x in X.items()
+        }
 
         layout = X.keys()
         # The first two tuple indices indicate the views.
@@ -209,14 +214,16 @@ class SolrCMF(ADMM[SolrCMFBlocks, SolrCMFConstraints, SolrCMFParams]):
 
         ctx.data = X
 
-        if not (
-            bool(self.structure_penalty is None and self.max_rank is None)
-            ^ bool(structure_pattern is None)
-        ):
+        if structure_pattern is None:
+            if self.structure_penalty is None or self.max_rank is None:
+                raise ValueError(
+                    "Either both 'structure_penalty' and 'max_rank', or"
+                    " 'structure_pattern' need to be provided."
+                )
+        elif self.structure_penalty is not None or self.max_rank is not None:
             raise ValueError(
-                "Either both structure_penalty and max_rank, or"
-                " structure_pattern need to be provided. The respective"
-                " other(s) need to be None."
+                "'structure_penalty' and 'max_rank' need to be None when"
+                " 'structure_pattern' is provided."
             )
 
         if self.factor_penalty is not None and factor_pattern is not None:
@@ -358,7 +365,7 @@ class SolrCMF(ADMM[SolrCMFBlocks, SolrCMFConstraints, SolrCMFParams]):
             )
 
         if ctx.params.factor_sparsity and isinstance(
-            self.factor_penalty, float
+            self.factor_penalty, Real
         ):
             u_edge_cases = {
                 k: self.factor_penalty * w * sqrt(viewdims[k]) / rho
@@ -493,13 +500,13 @@ class SolrCMF(ADMM[SolrCMFBlocks, SolrCMFConstraints, SolrCMFParams]):
 
         return neg_mean_squared_error(X, self.transform(X), indices=indices)
 
-    def structure_pattern(self):
+    def structure_pattern(self) -> dict[ViewDesc, NDArray[bool_]]:
         """Return the structure pattern of the fitted solution."""
         check_is_fitted(self)
 
         return {k: d != 0.0 for k, d in self.ds_.items()}
 
-    def factor_pattern(self) -> dict[Entity, bool] | None:
+    def factor_pattern(self) -> dict[Entity, NDArray[bool_]] | None:
         """Return the factor pattern of the fitted solution.
 
         Returns None if factor sparsity was not computed.
@@ -527,10 +534,17 @@ class SolrCMF(ADMM[SolrCMFBlocks, SolrCMFConstraints, SolrCMFParams]):
 
         return out
 
-    def _more_tags(self):
-        return {
-            "X_types": "dict",
-        }
+    def __sklearn_tags__(self):
+        """Declare input expectations via the public tags API.
+
+        The estimator consumes a dict of data matrices instead of a
+        single 2d array, and missing entries may be encoded as NaN.
+        """
+        tags = super().__sklearn_tags__()
+        tags.input_tags.two_d_array = False
+        tags.input_tags.dict = True
+        tags.input_tags.allow_nan = True
+        return tags
 
 
 def _rho_lower_bound(

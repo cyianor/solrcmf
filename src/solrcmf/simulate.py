@@ -5,8 +5,9 @@ This module provides functions to simulate synthetic data.
 
 from collections.abc import Mapping
 from typing import TypedDict
+from warnings import warn
 
-from numpy import argsort, atleast_1d, diag, float64, floor, sqrt, sum
+from numpy import argsort, atleast_1d, diag, eye, float64, floor, sqrt, sum
 from numpy.linalg import qr
 from numpy.random import Generator, default_rng
 from numpy.typing import ArrayLike, NDArray
@@ -55,18 +56,33 @@ def _sparse_v(
     for i in range(max_rank):
         v[zero_indices[:, i], i] = 0.0
 
-    # Orthonormalise the columns while keeping their respective zero pattern
-    for i in range(max_rank):
-        for j in range(i):
-            mask = v[:, i] != 0.0
-            if all(v[mask, j] == 0.0):
-                continue
+    # Orthonormalise the columns while keeping their respective zero
+    # patterns. A single masked Gram-Schmidt sweep is not sufficient:
+    # a projection restricted to the mask of a later column can destroy
+    # the orthogonality achieved for earlier column pairs, so sweeps are
+    # repeated until all pairwise inner products vanish.
+    max_sweeps = 100
+    for _ in range(max_sweeps):
+        for i in range(max_rank):
+            for j in range(i):
+                mask = v[:, i] != 0.0
+                if all(v[mask, j] == 0.0):
+                    continue
 
-            v[mask, i] -= (
-                sum(v[:, i] * v[:, j]) / sum(v[mask, j] ** 2) * v[mask, j]
-            )
+                v[mask, i] -= (
+                    sum(v[:, i] * v[:, j]) / sum(v[mask, j] ** 2) * v[mask, j]
+                )
 
-        v[:, i] /= sqrt(sum(v[:, i] ** 2))
+            v[:, i] /= sqrt(sum(v[:, i] ** 2))
+
+        if abs(v.T @ v - eye(max_rank)).max() <= 1e-12:
+            break
+    else:
+        warn(
+            "Sparse factor orthogonalisation did not converge; the"
+            " generated factors may not be orthogonal. Consider increasing"
+            " 'factor_sparsity' or decreasing the number of factors."
+        )
 
     return v
 
