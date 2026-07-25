@@ -1,5 +1,10 @@
 __pycache__/
 dist/
+.DS_Store
 site/
-.vscode
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
 .venv
+.coverage
+.vscode
