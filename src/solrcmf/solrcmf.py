@@ -136,7 +136,7 @@ class SolrCMF(ADMM[SolrCMFBlocks, SolrCMFConstraints, SolrCMFParams]):
                 and `ds` arguments of `fit`.
             init_kwargs: Additional keyword arguments for the initialiser. For
                 "random" init, supports "rng" (int or Generator) for
-                reproducibility and "repetitions" (int) for multiple restarts.
+                reproducibility.
             rho: ADMM penalty parameter. If None, a lower bound derived from
                 the problem structure is used.
             alpha: Ridge regularisation weight on V. Defaults to 1e-3 * rho.

@@ -1,5 +1,6 @@
 from numpy import zeros_like
 from numpy.random import default_rng
+from numpy.testing import assert_allclose
 
 from solrcmf import SolrCMF, best_random_init, simulate
 from solrcmf.base import Entity, ViewDesc
@@ -93,3 +94,21 @@ def test_convergence():
 
     assert est.converged_, f"Did not converge after {est.n_iter_} iterations"
     assert est.n_iter_ < 1000
+
+
+def test_random_init_accepts_integer_seed():
+    """Integer random seeds are accepted and reproduce direct fits."""
+    X = _simdata()["xs"]
+    first = SolrCMF(
+        structure_penalty=0.1,
+        max_rank=2,
+        init_kwargs={"rng": 42},
+    ).fit(X)
+    second = SolrCMF(
+        structure_penalty=0.1,
+        max_rank=2,
+        init_kwargs={"rng": 42},
+    ).fit(X)
+
+    for k in first.ds_:
+        assert_allclose(first.ds_[k], second.ds_[k])

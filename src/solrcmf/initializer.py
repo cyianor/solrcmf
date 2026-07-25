@@ -33,17 +33,15 @@ class RandomInitializer:
       are initialized to zero.
     """
 
-    def __init__(self, rng: Generator | None = None):
+    def __init__(self, rng: Generator | int | None = None):
         """Initialize a new RandomInitializer.
 
         Args:
-            rng: An instance of `numpy.random.Generator`
+            rng: An instance of `numpy.random.Generator`, an integer seed,
+                or `None` to use a freshly seeded default generator.
 
         """
-        if rng is None:
-            rng = default_rng()
-
-        self.rng = rng
+        self.rng = default_rng(rng)
 
     def __call__(
         self, ctx: Context[SolrCMFBlocks, SolrCMFConstraints, SolrCMFParams]

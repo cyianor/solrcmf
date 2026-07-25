@@ -23,13 +23,12 @@ from numpy import (
     flatnonzero,
     float64,
     full,
-    inf,
     intp,
     mean,
-    nan,
     ndim,
     reshape,
     split,
+    sqrt,
     std,
     sum,
     vstack,
@@ -83,8 +82,8 @@ class SolrCMFCV(BaseEstimator):
               the parameter values for each combination.
             - "<score>_fold<i>": held-out score on fold i, where
               <score> is the chosen scoring function.
-            - "mean_<score>", "std_<score>": mean and standard
-              deviation of the per-fold scores across folds.
+            - "mean_<score>", "std_<score>", "sem_<score>": mean,
+              standard deviation, and standard error of the per-fold scores.
             - "est_max_rank": effective rank of the best run.
             - "structural_zeros": number of zero entries in d[k] summed
               over all view pairs (proxy for structure sparsity).
@@ -206,6 +205,8 @@ class SolrCMFCV(BaseEstimator):
                 refits with the full penalty.
             init: Initialisation strategy passed to each SolrCMF fit.
             init_kwargs: Additional keyword arguments for the initialiser.
+                For random initialization, "rng" accepts an integer seed or
+                Generator and "repetitions" controls the number of restarts.
             rho: ADMM penalty parameter passed to each SolrCMF fit.
             alpha: Ridge regularisation weight on V passed to each SolrCMF fit.
             mu: V'-slack penalty weight passed to each SolrCMF fit.
@@ -330,15 +331,19 @@ class SolrCMFCV(BaseEstimator):
             "factor_penalty": [f for _, _, f in parameter_grid],
         }
 
-        if self.init_kwargs is None:
-            init_kwargs = {}
-        else:
-            init_kwargs = self.init_kwargs
+        init_kwargs = dict(self.init_kwargs or {})
 
         if self.init == "random":
-            n_reps = 1
-            if "repetitions" in init_kwargs:
-                n_reps = init_kwargs.pop("repetitions")
+            n_reps = init_kwargs.pop("repetitions", 1)
+            if (
+                not isinstance(n_reps, Integral)
+                or isinstance(n_reps, bool)
+                or n_reps < 1
+            ):
+                raise ValueError(
+                    "'init_kwargs[\"repetitions\"]' needs to be a positive"
+                    " integer"
+                )
 
             def inits() -> InitsGeneratorType:
                 for i in range(n_reps):
@@ -757,24 +762,16 @@ class SolrCMFCV(BaseEstimator):
                 factor_zeros,
             ) = zip(*out, strict=True)
 
+            best_runs, selected_scores = _select_best_penalized_runs(
+                scores,
+                n_params=n_params,
+                n_reps=n_reps,
+                n_folds=n_folds,
+            )
             for i in range(n_folds):
-                results[f"{self.score}_fold{i}"] = [nan] * n_params
-
-            best_runs = [-1] * n_params
-            best_score = [inf] * n_params
-            for idx_params, scores_params in enumerate(
-                split(asarray(scores), n_params)
-            ):
-                for idx_init, scores_inits in enumerate(
-                    split(scores_params, n_reps)
-                ):
-                    if mean(scores_inits) < best_score[idx_params]:
-                        best_score[idx_params] = mean(scores_inits)
-                        best_runs[idx_params] = idx_init
-                        for i in range(n_folds):
-                            results[f"{self.score}_fold{i}"][idx_params] = (
-                                scores_inits[i]
-                            )
+                results[f"{self.score}_fold{i}"] = selected_scores[
+                    :, i
+                ].tolist()
 
             elapsed_process_times = split(
                 asarray(elapsed_process_times), n_params
@@ -834,10 +831,12 @@ class SolrCMFCV(BaseEstimator):
         scores = vstack(
             [results[f"{self.score}_fold{i}"] for i in range(n_folds)]
         )
+        score_std = scores.std(0)
         results.update(
             {
                 f"mean_{self.score}": scores.mean(0),
-                f"std_{self.score}": scores.std(0),
+                f"std_{self.score}": score_std,
+                f"sem_{self.score}": score_std / sqrt(n_folds),
             }
         )
 
@@ -846,36 +845,11 @@ class SolrCMFCV(BaseEstimator):
         if self.verbose:
             print("Re-fit final estimator")
 
-        if self.refit.startswith("mean"):
-            self.best_index_ = argmax(results[f"mean_{self.score}"])
-        elif self.refit.startswith("1se"):
-            # Choose the solution with maximal structure sparsity within
-            # 1 standard error of the best solution
-            max_index = argmax(results[f"mean_{self.score}"])
-
-            candidates = flatnonzero(
-                results[f"mean_{self.score}"]
-                >= (
-                    results[f"mean_{self.score}"][max_index]
-                    - results[f"std_{self.score}"][max_index]
-                )
-            )
-
-            # Primarily choose the solution with the most
-            # structural zeros and then select the solution with the
-            # most factor zeros if factor sparsity was requested
-            structural_zeros = asarray(
-                [results["structural_zeros"][i] for i in candidates]
-            )
-            most_sz_candidates = candidates[
-                flatnonzero(structural_zeros == max(structural_zeros))
-            ]
-
-            factor_zeros = [
-                results["factor_zeros"][i] for i in most_sz_candidates
-            ]
-
-            self.best_index_ = most_sz_candidates[argmax(factor_zeros)]
+        self.best_index_ = _select_best_index(
+            results,
+            score=self.score,
+            refit=self.refit,
+        )
 
         structure_penalty, max_rank, factor_penalty = parameter_grid[
             self.best_index_
@@ -983,3 +957,49 @@ class SolrCMFCV(BaseEstimator):
         self.best_max_rank_ = self.best_estimator_.est_max_rank_
 
         return self
+
+
+def _select_best_penalized_runs(
+    scores: ArrayLike,
+    *,
+    n_params: int,
+    n_reps: int,
+    n_folds: int,
+) -> tuple[NDArray[intp], NDArray[float64]]:
+    """Select the highest-scoring restart for each parameter combination."""
+    scores_array = asarray(scores, dtype=float64).reshape(
+        n_params, n_reps, n_folds
+    )
+    best_runs = argmax(scores_array.mean(axis=2), axis=1)
+    selected_scores = asarray(
+        [
+            scores_array[idx_params, idx_run, :]
+            for idx_params, idx_run in enumerate(best_runs)
+        ]
+    )
+    return best_runs, selected_scores
+
+
+def _select_best_index(
+    results: dict[str, Any],
+    *,
+    score: str,
+    refit: str,
+) -> int:
+    """Select the best parameter index using mean score or the 1-SE rule."""
+    mean_scores = asarray(results[f"mean_{score}"])
+    max_index = int(argmax(mean_scores))
+    if refit.startswith("mean"):
+        return max_index
+
+    candidates = flatnonzero(
+        mean_scores
+        >= mean_scores[max_index] - asarray(results[f"sem_{score}"])[max_index]
+    )
+
+    structural_zeros = asarray(results["structural_zeros"])[candidates]
+    most_structural_zeros = candidates[
+        flatnonzero(structural_zeros == max(structural_zeros))
+    ]
+    factor_zeros = asarray(results["factor_zeros"])[most_structural_zeros]
+    return int(most_structural_zeros[argmax(factor_zeros)])
