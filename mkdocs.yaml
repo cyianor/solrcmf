@@ -54,6 +54,10 @@ plugins:
           heading_level: 4
           summary: true
 - mkdocs-jupyter:
+    include:
+    - "*.ipynb"
+    ignore:
+    - "*.md"
     include_source: True
 
 watch:

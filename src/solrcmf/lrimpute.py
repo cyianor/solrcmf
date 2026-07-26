@@ -20,6 +20,7 @@ from numpy import (
 )
 from numpy.linalg import solve
 from numpy.random import RandomState
+from numpy.typing import ArrayLike
 from sklearn.base import BaseEstimator
 from sklearn.utils._param_validation import Interval, StrOptions
 from sklearn.utils.validation import check_array, check_random_state
@@ -93,7 +94,14 @@ class LowRankImputation(BaseEstimator):
     def _more_tags(self):
         return {"allow_nan": True}
 
-    def fit(self, X, y=None, *, U=None, V=None) -> "LowRankImputation":
+    def fit(
+        self,
+        X: ArrayLike,
+        y: object | None = None,
+        *,
+        U: ArrayLike | None = None,
+        V: ArrayLike | None = None,
+    ) -> "LowRankImputation":
         """Fit the low-rank factorisation to X.
 
         Args:

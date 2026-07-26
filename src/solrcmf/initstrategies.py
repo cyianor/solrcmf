@@ -6,6 +6,8 @@ suboptimal solution or use the SolrCMF algorithm to compute rough initial
 decompositions starting from random initial decompositions.
 """
 
+from typing import Any
+
 from joblib import Parallel, delayed
 from numpy import diag, float64, hstack, inf, vstack
 from numpy.linalg import svd
@@ -64,7 +66,7 @@ def best_random_init(
     n_inits: int = 1,
     n_jobs: int = -1,
     rng: Generator | int | None = None,
-    **kwargs,
+    **kwargs: Any,
 ) -> SolrCMF:
     """Generate best unpenalized solution from random starting points.
 

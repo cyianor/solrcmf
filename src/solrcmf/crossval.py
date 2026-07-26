@@ -276,7 +276,7 @@ class SolrCMFCV(BaseEstimator):
     def fit(
         self,
         X: dict[ViewDesc, NDArray[float64]],
-        y=None,
+        y: object | None = None,
         *,
         structure_weights: (
             dict[ViewDesc, NDArray[float64] | float64] | None
