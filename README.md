@@ -265,12 +265,14 @@ The correctness of the estimated sparsity pattern can be analysed by looking at 
 
 ```python
 def true_positive_rate(estimate, truth):
+    """Return the true-positive rate for an estimated pattern."""
     return sum(np.logical_and(estimate != 0.0, truth != 0.0)) / sum(
         truth != 0.0
     )
 
 
 def false_positive_rate(estimate, truth):
+    """Return the false-positive rate for an estimated pattern."""
     return sum(np.logical_and(estimate != 0.0, truth == 0.0)) / sum(
         truth == 0.0
     )
