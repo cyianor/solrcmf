@@ -1,0 +1,23 @@
+#!/bin/sh
+set -eu
+
+repository_root=$(git rev-parse --show-toplevel)
+cd "$repository_root"
+
+temporary_directory=$(mktemp -d)
+trap 'rm -rf -- "$temporary_directory"' EXIT HUP INT TERM
+
+uv run --locked --no-sync jupyter nbconvert \
+    --to markdown \
+    --output-dir "$temporary_directory" \
+    README.ipynb
+
+generated_readme="$temporary_directory/README.md"
+uv run --locked --no-sync ruff format --preview "$generated_readme"
+perl -0pi -e 's/\s+\z/\n/' "$generated_readme"
+if ! cmp -s README.md "$generated_readme"; then
+    printf '%s\n' \
+        "README.md is out of date; run ./scripts/update-readme"
+    diff -u README.md "$generated_readme"
+    exit 1
+fi

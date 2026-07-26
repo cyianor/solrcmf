@@ -2,22 +2,27 @@
 
 This is a package describing the data integration methodology from ["Sparse and orthogonal low-rank Collective Matrix Factorization (solrCMF): Efficient data integration in flexible layouts" (Held et al., 2024, arXiv:2405.10067)](https://arxiv.org/abs/2405.10067).
 
-To install the package run
+To install the published package run
 ```sh
 pip install solrcmf
+```
+and to install the development version run
+```sh
+pip install git+https://github.com/cyianor/solrcmf.git
 ```
 
 A simple usage example is shown below:
 
 
 ```python
+import numpy as np
+from numpy.random import default_rng
 from sklearn import set_config
+
+import solrcmf
 
 set_config(display="text")  # show text representation of sklearn estimators
 
-import solrcmf
-import numpy as np
-from numpy.random import default_rng
 
 # Control randomness
 rng = default_rng(42)
@@ -120,7 +125,7 @@ final values of the initial runs as starting values. Penalty parameters are not 
 
 
 ```python
-est.fit(xs_scaled, vs=est_init.vs_, ds=est_init.ds_, us=est_init.vs_);
+_ = est.fit(xs_scaled, vs=est_init.vs_, ds=est_init.ds_, us=est_init.vs_)
 ```
 
 Estimates for $D_{ij}$ are then in `est.ds_` and estimates for $V_i$ in `est.vs_`.
@@ -162,9 +167,9 @@ The final solution is found by determining the pair of hyperparameters that lead
 # parameter combinations to be tested. Lists need to be of the same length
 # or one needs to be a scalar.
 # - `cv` number of folds as an integer or an object of
-#   class `solrcmf.ElementwiseFolds`. The latter is also used internally if only
-#   an integer is provided, however, it allows specification of a random
-#   number generator and whether or not inputs should be shuffled
+#   class `solrcmf.ElementwiseFolds`. The latter is also used internally
+#   if only an integer is provided, however, it allows specification of a
+#   random number generator and whether or not inputs should be shuffled
 #   before splitting.
 est_cv = solrcmf.SolrCMFCV(
     max_rank=10,
@@ -185,7 +190,12 @@ Perform hyperparameter selection. This step can be time-intensive.
 # Initial values are supplied as lists. If length 1 then they are reused.
 # If same length as hyperparameters then different initial values can be used
 # for each pair of hyperparameters.
-est_cv.fit(xs_scaled, vs=[est_init.vs_], ds=[est_init.ds_], us=[est_init.vs_]);
+_ = est_cv.fit(
+    xs_scaled,
+    vs=[est_init.vs_],
+    ds=[est_init.ds_],
+    us=[est_init.vs_],
+)
 ```
 
 CV results can be found in the attribute `est_cv.cv_results_` and can be easily converted to a Pandas `DataFrame`. The best result corresponds to the row with index `est_cv.best_index_`.
@@ -195,36 +205,34 @@ CV results can be found in the attribute `est_cv.cv_results_` and can be easily 
 import pandas as pd
 
 cv_res = pd.DataFrame(est_cv.cv_results_)
-cv_res.loc[est_cv.best_index_, :]
+best_result = cv_res.loc[est_cv.best_index_, :]
+best_result[~best_result.index.str.contains("elapsed_process_time")]
 ```
 
 
 
 
-    structure_penalty                         0.114250
-    max_rank                                 10.000000
-    factor_penalty                            0.058822
-    objective_value_penalized                 2.014111
-    mean_elapsed_process_time_penalized       5.931681
-    std_elapsed_process_time_penalized        0.000000
-    est_max_rank                              5.000000
-    structural_zeros                         30.000000
-    factor_zeros                           1748.000000
-    neg_mean_squared_error_fold0             -0.000191
-    neg_mean_squared_error_fold1             -0.000189
-    neg_mean_squared_error_fold2             -0.000196
-    neg_mean_squared_error_fold3             -0.000169
-    neg_mean_squared_error_fold4             -0.000199
-    neg_mean_squared_error_fold5             -0.000188
-    neg_mean_squared_error_fold6             -0.000184
-    neg_mean_squared_error_fold7             -0.000185
-    neg_mean_squared_error_fold8             -0.000191
-    neg_mean_squared_error_fold9             -0.000181
-    mean_elapsed_process_time_fixed           0.990001
-    std_elapsed_process_time_fixed            0.108464
-    mean_neg_mean_squared_error              -0.000187
-    std_neg_mean_squared_error                0.000008
-    Name: 76, dtype: float64
+    structure_penalty                  0.062040
+    max_rank                          10.000000
+    factor_penalty                     0.069416
+    objective_value_penalized          1.940769
+    est_max_rank                       5.000000
+    structural_zeros                  30.000000
+    factor_zeros                    1735.000000
+    neg_mean_squared_error_fold0      -0.000187
+    neg_mean_squared_error_fold1      -0.000183
+    neg_mean_squared_error_fold2      -0.000187
+    neg_mean_squared_error_fold3      -0.000169
+    neg_mean_squared_error_fold4      -0.000195
+    neg_mean_squared_error_fold5      -0.000181
+    neg_mean_squared_error_fold6      -0.000182
+    neg_mean_squared_error_fold7      -0.000180
+    neg_mean_squared_error_fold8      -0.000185
+    neg_mean_squared_error_fold9      -0.000177
+    mean_neg_mean_squared_error       -0.000183
+    std_neg_mean_squared_error         0.000006
+    sem_neg_mean_squared_error         0.000002
+    Name: 1, dtype: float64
 
 
 
@@ -238,10 +246,10 @@ for k, d in est_cv.best_estimator_.ds_.items():
     )
 ```
 
-    (0, 1)    : [ 3.92 -0.00 -5.24  0.00  7.43]
-    (0, 2)    : [-0.00  5.06  0.00 -0.00 -8.45]
-    (1, 2, 0) : [-4.26 -0.00  0.00 -4.17 -6.58]
-    (1, 2, 1) : [-4.84  0.00 -9.23  0.00  0.00]
+    (0, 1)    : [ 4.29 -0.00 -5.25  0.00  7.41]
+    (0, 2)    : [-0.00  5.20  0.00 -0.00 -8.45]
+    (1, 2, 0) : [-4.32 -0.00  0.00 -4.49 -6.60]
+    (1, 2, 1) : [-4.87  0.00 -9.21  0.00  0.00]
 
 
 Due to the small size of the data sources and signal-to-noise ratio of 0.5, it is not possible to recover singular values perfectly. However, thanks to unpenalized re-estimation, the strong shrinkage seen in the manual solution above is not present here.
@@ -256,7 +264,7 @@ sum(xs_sim["vs"][0][:, 0] * est_cv.best_estimator_.us_[0][:, 4])
 
 
 
-    np.float64(-0.9878174758052283)
+    np.float64(-0.9884671896686151)
 
 
 
@@ -293,11 +301,4 @@ def false_positive_rate(estimate, truth):
 
 
 
-    (np.float64(0.6410256410256411), np.float64(0.0))
-
-
-
-
-```python
-
-```
+    (np.float64(0.6578947368421053), np.float64(0.0))

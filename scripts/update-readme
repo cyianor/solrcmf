@@ -1,0 +1,17 @@
+#!/bin/sh
+set -eu
+
+repository_root=$(git rev-parse --show-toplevel)
+cd "$repository_root"
+
+uv run --locked --no-sync jupyter nbconvert \
+    --execute \
+    --to notebook \
+    --inplace \
+    --ExecutePreprocessor.record_timing=False \
+    README.ipynb
+uv run --locked --no-sync jupyter nbconvert \
+    --to markdown \
+    README.ipynb
+uv run --locked --no-sync ruff format --preview README.md
+perl -0pi -e 's/\s+\z/\n/' README.md
