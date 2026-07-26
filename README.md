@@ -55,7 +55,7 @@ xs_sim = solrcmf.simulate(
         (1, 2, 1): [0.0, 8.6, 4.9, 0.0, 0.0],
     },
     factor_sparsity={0: 0.25, 1: 0.25, 2: 0.25},
-    snr=0.5,
+    snr=0.75,
     rng=rng,
 )
 
@@ -142,10 +142,10 @@ for k, d in est.ds_.items():
     )
 ```
 
-    (0, 1)    : [-0.00  2.34 -0.00 -0.00 -4.17  0.00  0.00  0.00  0.00  6.52]
-    (0, 2)    : [ 0.00 -0.00  3.44  0.00  0.00 -0.00 -0.00  0.00 -0.00 -7.53]
-    (1, 2, 0) : [ 0.00 -3.21 -0.00  0.00  0.00  0.00  0.00 -0.00 -2.88 -5.67]
-    (1, 2, 1) : [ 0.00 -3.74  0.05 -0.00 -8.22 -0.00  0.00 -0.00  0.00  0.00]
+    (0, 1)    : [ 0.00 -0.00 -0.00 -0.00 -0.00  3.49  0.00  6.26 -4.45 -0.00]
+    (0, 2)    : [ 0.00 -4.77 -0.00  0.00 -0.00 -0.00  0.00 -7.81  0.00 -0.00]
+    (1, 2, 0) : [-0.00 -0.00 -3.59 -0.00 -0.00  4.26  0.00 -5.64 -0.00 -0.00]
+    (1, 2, 1) : [ 0.00  0.00 -0.00 -0.00 -0.00  3.89  0.00  0.00 -7.57 -0.00]
 
 
 Shrinkage can be clearly seen in the singular value estimates compared to the groundtruth.
@@ -212,27 +212,27 @@ best_result[~best_result.index.str.contains("elapsed_process_time")]
 
 
 
-    structure_penalty                  0.062040
+    structure_penalty                  0.127642
     max_rank                          10.000000
-    factor_penalty                     0.069416
-    objective_value_penalized          1.940769
+    factor_penalty                     0.051772
+    objective_value_penalized          1.842884
     est_max_rank                       5.000000
     structural_zeros                  30.000000
-    factor_zeros                    1735.000000
-    neg_mean_squared_error_fold0      -0.000187
-    neg_mean_squared_error_fold1      -0.000183
-    neg_mean_squared_error_fold2      -0.000187
-    neg_mean_squared_error_fold3      -0.000169
-    neg_mean_squared_error_fold4      -0.000195
-    neg_mean_squared_error_fold5      -0.000181
-    neg_mean_squared_error_fold6      -0.000182
-    neg_mean_squared_error_fold7      -0.000180
-    neg_mean_squared_error_fold8      -0.000185
-    neg_mean_squared_error_fold9      -0.000177
-    mean_neg_mean_squared_error       -0.000183
-    std_neg_mean_squared_error         0.000006
-    sem_neg_mean_squared_error         0.000002
-    Name: 1, dtype: float64
+    factor_zeros                    1704.000000
+    neg_mean_squared_error_fold0      -0.000159
+    neg_mean_squared_error_fold1      -0.000155
+    neg_mean_squared_error_fold2      -0.000151
+    neg_mean_squared_error_fold3      -0.000154
+    neg_mean_squared_error_fold4      -0.000159
+    neg_mean_squared_error_fold5      -0.000154
+    neg_mean_squared_error_fold6      -0.000151
+    neg_mean_squared_error_fold7      -0.000153
+    neg_mean_squared_error_fold8      -0.000160
+    neg_mean_squared_error_fold9      -0.000152
+    mean_neg_mean_squared_error       -0.000155
+    std_neg_mean_squared_error         0.000003
+    sem_neg_mean_squared_error         0.000001
+    Name: 71, dtype: float64
 
 
 
@@ -246,25 +246,25 @@ for k, d in est_cv.best_estimator_.ds_.items():
     )
 ```
 
-    (0, 1)    : [ 4.29 -0.00 -5.25  0.00  7.41]
-    (0, 2)    : [-0.00  5.20  0.00 -0.00 -8.45]
-    (1, 2, 0) : [-4.32 -0.00  0.00 -4.49 -6.60]
-    (1, 2, 1) : [-4.87  0.00 -9.21  0.00  0.00]
+    (0, 1)    : [-0.00 -0.00  4.51  7.06 -5.50]
+    (0, 2)    : [-5.82 -0.00 -0.00 -8.65  0.00]
+    (1, 2, 0) : [-0.00 -4.59  5.15 -6.49 -0.00]
+    (1, 2, 1) : [ 0.00  0.00  4.74  0.00 -8.54]
 
 
-Due to the small size of the data sources and signal-to-noise ratio of 0.5, it is not possible to recover singular values perfectly. However, thanks to unpenalized re-estimation, the strong shrinkage seen in the manual solution above is not present here.
+Due to the small size of the data sources and signal-to-noise ratio of 0.75, it is not possible to recover singular values perfectly. However, thanks to unpenalized re-estimation, the strong shrinkage seen in the manual solution above is not present here.
 
-The factor estimates are in `est_cv.best_estimator_.vs_`, however, sparse factors can be found in `est_cv.best_estimator_.us_`. In this particular run, factor 1 of view 0 in the groundtruth corresponds to factor 5 in view 0 of the estimate. Note that in general factor order is arbitrary.
+The factor estimates are in `est_cv.best_estimator_.vs_`, however, sparse factors can be found in `est_cv.best_estimator_.us_`. In this particular run, factor 1 of view 0 in the groundtruth corresponds to factor 4 in view 0 of the estimate. Note that in general factor order is arbitrary.
 
 
 ```python
-sum(xs_sim["vs"][0][:, 0] * est_cv.best_estimator_.us_[0][:, 4])
+sum(xs_sim["vs"][0][:, 0] * est_cv.best_estimator_.us_[0][:, 3])
 ```
 
 
 
 
-    np.float64(-0.9884671896686151)
+    np.float64(0.9896437793797987)
 
 
 
@@ -290,10 +290,10 @@ def false_positive_rate(estimate, truth):
 ```python
 (
     true_positive_rate(
-        xs_sim["vs"][0][:, 0], est_cv.best_estimator_.us_[0][:, 4]
+        est_cv.best_estimator_.us_[0][:, 3], xs_sim["vs"][0][:, 0]
     ),
     false_positive_rate(
-        xs_sim["vs"][0][:, 0], est_cv.best_estimator_.us_[0][:, 4]
+        est_cv.best_estimator_.us_[0][:, 3], xs_sim["vs"][0][:, 0]
     ),
 )
 ```
@@ -301,4 +301,4 @@ def false_positive_rate(estimate, truth):
 
 
 
-    (np.float64(0.6578947368421053), np.float64(0.0))
+    (np.float64(1.0), np.float64(0.29333333333333333))
