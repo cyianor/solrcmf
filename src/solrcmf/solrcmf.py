@@ -368,7 +368,8 @@ class SolrCMF(ADMM[SolrCMFBlocks, SolrCMFConstraints, SolrCMFParams]):
                 warn(
                     "For numerical stability, factor_penalty * weight[k] *"
                     " sqrt(viewdims[k]) / rho < 1 should hold for all views k."
-                    f" Here: {u_edge_cases}"
+                    f" Here: {u_edge_cases}",
+                    stacklevel=2,
                 )
 
         ctx.params.rho = rho

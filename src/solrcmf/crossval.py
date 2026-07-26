@@ -5,10 +5,11 @@ parameter grids for the SolrCMF problem. CV is performed in parallel across
 independent parameter combinations.
 """
 
+from collections.abc import Generator
 from numbers import Integral, Real
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Any, Generator
+from typing import Any
 from warnings import warn
 
 from joblib import Parallel, delayed, dump, load
@@ -262,7 +263,14 @@ class SolrCMFCV(BaseEstimator):
             structure_penalty, max_rank, factor_penalty
         )
 
-        return list(zip(structure_penalty, max_rank, factor_penalty))
+        return list(
+            zip(
+                structure_penalty,
+                max_rank,
+                factor_penalty,
+                strict=True,
+            )
+        )
 
     def fit(
         self,
@@ -425,7 +433,8 @@ class SolrCMFCV(BaseEstimator):
                         f" max_rank={max_rank},"
                         f" factor_penalty={factor_penalty}):"
                         f" {est.__class__.__name__} did not converge"
-                        f" after {est.n_iter_} iterations."
+                        f" after {est.n_iter_} iterations.",
+                        stacklevel=2,
                     )
 
                 # Save estimator for later
@@ -499,7 +508,7 @@ class SolrCMFCV(BaseEstimator):
                 est_max_rank,
                 structural_zeros,
                 factor_zeros,
-            ) = zip(*out)
+            ) = zip(*out, strict=True)
 
             if self.verbose:
                 print("Determine best runs")
@@ -509,7 +518,8 @@ class SolrCMFCV(BaseEstimator):
             objective_values = split(asarray(objective_values), n_params)
             best_runs = [int(argmin(vals)) for vals in objective_values]
             results["objective_value_penalized"] = [
-                vals[idx] for idx, vals in zip(best_runs, objective_values)
+                vals[idx]
+                for idx, vals in zip(best_runs, objective_values, strict=True)
             ]
 
             elapsed_process_times = split(
@@ -524,15 +534,18 @@ class SolrCMFCV(BaseEstimator):
 
             est_max_rank = split(asarray(est_max_rank), n_params)
             results["est_max_rank"] = [
-                rks[idx] for idx, rks in zip(best_runs, est_max_rank)
+                rks[idx]
+                for idx, rks in zip(best_runs, est_max_rank, strict=True)
             ]
             structural_zeros = split(asarray(structural_zeros), n_params)
             results["structural_zeros"] = [
-                zs[idx] for idx, zs in zip(best_runs, structural_zeros)
+                zs[idx]
+                for idx, zs in zip(best_runs, structural_zeros, strict=True)
             ]
             factor_zeros = split(asarray(factor_zeros), n_params)
             results["factor_zeros"] = [
-                zs[idx] for idx, zs in zip(best_runs, factor_zeros)
+                zs[idx]
+                for idx, zs in zip(best_runs, factor_zeros, strict=True)
             ]
 
             def _debiased_cv_score(
@@ -560,7 +573,8 @@ class SolrCMFCV(BaseEstimator):
                     warn(
                         "Fixed structure estimation of"
                         f" {est.__class__.__name__} did not converge after"
-                        f" {est.n_iter_} iterations."
+                        f" {est.n_iter_} iterations.",
+                        stacklevel=2,
                     )
 
                 return (
@@ -571,7 +585,9 @@ class SolrCMFCV(BaseEstimator):
             # Reads fitted penalized estimators from cache and
             # extracts structure/factor patterns
             def solrcmf_estimators():
-                for idx_params, idx_init in zip(range(n_params), best_runs):
+                for idx_params, idx_init in zip(
+                    range(n_params), best_runs, strict=True
+                ):
                     yield load(tmppath / f"{idx_params}_{idx_init}.pkl")
 
             # We want exactly the same splits for all parameter combinations,
@@ -599,7 +615,7 @@ class SolrCMFCV(BaseEstimator):
             (
                 scores,
                 elapsed_process_times,
-            ) = zip(*out)
+            ) = zip(*out, strict=True)
 
             for i in range(n_folds):
                 results[f"{self.score}_fold{i}"] = [
@@ -658,7 +674,8 @@ class SolrCMFCV(BaseEstimator):
                         f" max_rank={max_rank},"
                         f" factor_penalty={factor_penalty}):"
                         f" {est.__class__.__name__} did not converge"
-                        f" after {est.n_iter_} iterations."
+                        f" after {est.n_iter_} iterations.",
+                        stacklevel=2,
                     )
 
                 return (
@@ -738,7 +755,7 @@ class SolrCMFCV(BaseEstimator):
                 est_max_rank,
                 structural_zeros,
                 factor_zeros,
-            ) = zip(*out)
+            ) = zip(*out, strict=True)
 
             for i in range(n_folds):
                 results[f"{self.score}_fold{i}"] = [nan] * n_params

@@ -119,7 +119,8 @@ class LowRankImputation(BaseEstimator):
             if self.init != "custom":
                 warn(
                     "When init!='custom', provided U or V are ignored. Set"
-                    " init='custom' to use them as initialization."
+                    " init='custom' to use them as initialization.",
+                    stacklevel=2,
                 )
 
         if self.warm_start and hasattr(self, "U_") and hasattr(self, "V_"):
@@ -136,7 +137,7 @@ class LowRankImputation(BaseEstimator):
         loss_old = _compute_loss(X, U, V, penalty)
 
         converged = False
-        for i in range(max_iter):
+        for _i in range(max_iter):
             # We will solve
             # min_{u, v} 0.5 sum_{i, j obs.} (x^(i, j) - u^(i, :) v^(j, :))^2
             #            + lambda / 2 * ||u||_F^2
@@ -171,7 +172,7 @@ class LowRankImputation(BaseEstimator):
         self.converged_ = converged
         self.U_ = U
         self.V_ = V
-        self.n_iter_ = i + 1
+        self.n_iter_ = _i + 1
         self.n_features_in_ = X.shape[1]
         self.loss_ = loss
 

@@ -312,7 +312,8 @@ def _(block: UBlock, ctx: SolrCMFContext):
         for i in (m == 0.0).all(0).nonzero()[0]:
             warn(
                 f"Edge case occurred in U subproblem for index {block.idx}"
-                f" - maximum value in m is {abs(m[:, i]).max()}"
+                f" - maximum value in m is {abs(m[:, i]).max()}",
+                stacklevel=2,
             )
             tmp = (
                 -abs(m[:, i])
