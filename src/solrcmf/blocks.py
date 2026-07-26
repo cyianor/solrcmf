@@ -15,6 +15,7 @@ from numpy import (
     abs,
     argmin,
     bool_,
+    broadcast_to,
     float64,
     intp,
     maximum,
@@ -288,7 +289,7 @@ class UBlock(Block[Entity]):
 @update.register
 def _(block: UBlock, ctx: SolrCMFContext):
     """Soft-threshold or pattern-mask then column-normalize."""
-    m = (
+    m_original = (
         ctx.blocks.v[block.idx].value
         + ctx.blocks.vp[block.idx].value
         - ctx.constraints.factor[block.idx].value
@@ -297,35 +298,30 @@ def _(block: UBlock, ctx: SolrCMFContext):
 
     if ctx.params.fixed_factor_pattern:
         # If 0-pattern is known
-        m *= ctx.params.factor_pattern[block.idx]
+        m = m_original * ctx.params.factor_pattern[block.idx]
     else:
         # Soft-thresholding
-        m = sign(m) * maximum(
-            abs(m)
-            - ctx.params.factor_penalty
+        threshold = broadcast_to(
+            ctx.params.factor_penalty
             * ctx.params.factor_weights[block.idx]
             / ctx.params.rho,
-            0.0,
+            m_original.shape,
         )
+        m = sign(m_original) * maximum(abs(m_original) - threshold, 0.0)
 
         # Deal with edge cases
         for i in (m == 0.0).all(0).nonzero()[0]:
             warn(
                 f"Edge case occurred in U subproblem for index {block.idx}"
-                f" - maximum value in m is {abs(m[:, i]).max()}",
+                " - maximum pre-threshold magnitude is"
+                f" {abs(m_original[:, i]).max()}",
                 stacklevel=2,
             )
-            tmp = (
-                -abs(m[:, i])
-                + ctx.params.factor_penalty
-                * ctx.params.factor_weights[block.idx]
-                / ctx.params.rho
-            )
-            idx = argmin(tmp)
-            sgn = sign(tmp[idx])
+            idx = argmin(threshold[:, i] - abs(m_original[:, i]))
+            sgn = sign(m_original[idx, i])
             # Set to +/- unit vector
             m[:, i] = 0.0
-            m[idx, i] = sgn
+            m[idx, i] = sgn if sgn != 0.0 else 1.0
 
     # Column-normalize
     block.value = m / sqrt((m**2).sum(0))
