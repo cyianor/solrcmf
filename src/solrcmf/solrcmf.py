@@ -500,7 +500,7 @@ class SolrCMF(ADMM[SolrCMFBlocks, SolrCMFConstraints, SolrCMFParams]):
 
         return {k: d != 0.0 for k, d in self.ds_.items()}
 
-    def factor_pattern(self) -> dict[Entity, bool] | None:
+    def factor_pattern(self) -> dict[Entity, NDArray[bool_]] | None:
         """Return the factor pattern of the fitted solution.
 
         Returns None if factor sparsity was not computed.

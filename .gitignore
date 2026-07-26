@@ -3,6 +3,7 @@ dist/
 .DS_Store
 site/
 .mypy_cache/
+.cache/
 .ruff_cache/
 .pytest_cache/
 .venv

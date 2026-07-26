@@ -13,7 +13,7 @@ uv run --locked --no-sync jupyter nbconvert \
     README.ipynb
 
 generated_readme="$temporary_directory/README.md"
-uv run --locked --no-sync ruff format --preview "$generated_readme"
+uv run --locked --no-sync ruff format "$generated_readme"
 perl -0pi -e 's/\s+\z/\n/' "$generated_readme"
 if ! cmp -s README.md "$generated_readme"; then
     printf '%s\n' \
