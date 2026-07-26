@@ -241,7 +241,7 @@ def _(block: VBlock, ctx: SolrCMFContext):
                         k
                     ].value[:, active_factors]
 
-            ctx.params.max_rank = active_factors.sum()
+            ctx.params.max_rank = int(active_factors.sum())
 
     tmp = ctx.params.alpha / ctx.params.rho * block.value
     if ctx.params.factor_sparsity or ctx.params.fixed_factor_pattern:

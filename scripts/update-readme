@@ -13,5 +13,5 @@ uv run --locked --no-sync jupyter nbconvert \
 uv run --locked --no-sync jupyter nbconvert \
     --to markdown \
     README.ipynb
-uv run --locked --no-sync ruff format --preview README.md
+uv run --locked --no-sync ruff format README.md
 perl -0pi -e 's/\s+\z/\n/' README.md

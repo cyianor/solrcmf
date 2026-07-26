@@ -36,8 +36,8 @@ dev = [
     "mkdocs-jupyter>=0.25.1",
     "pandas>=2.3.2",
     "pytest>=8.4.2",
-    "ruff>=0.15.9",
-    "ty>=0.0.28",
+    "ruff>=0.16.0",
+    "ty>=0.0.63",
 ]
 
 [tool.hatch.build.targets.sdist]

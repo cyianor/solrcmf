@@ -418,7 +418,7 @@ class SolrCMFCV(BaseEstimator):
 
                 if est.init == "random":
                     est.init_kwargs = {
-                        **est.init_kwargs,
+                        **(est.init_kwargs or {}),
                         "rng": default_rng(rng),
                     }
 
@@ -445,6 +445,8 @@ class SolrCMFCV(BaseEstimator):
                 # Save estimator for later
                 dump(est, tmppath / f"{idx_params}_{idx_init}.pkl")
 
+                factor_pattern = est.factor_pattern()
+
                 return (
                     est.objective_value_,
                     est.elapsed_process_time_,
@@ -462,10 +464,10 @@ class SolrCMFCV(BaseEstimator):
                                 (max_rank - est.est_max_rank_)
                                 * (p.shape[0] - 1)
                                 + sum(1 - p)
-                                for p in est.factor_pattern().values()
+                                for p in factor_pattern.values()
                             ]
                         )
-                        if factor_penalty is not None
+                        if factor_pattern is not None
                         else 0
                     ),
                 )
@@ -658,7 +660,7 @@ class SolrCMFCV(BaseEstimator):
 
                 if est.init == "random":
                     est.init_kwargs = {
-                        **est.init_kwargs,
+                        **(est.init_kwargs or {}),
                         "rng": default_rng(rng),
                     }
 
@@ -683,6 +685,8 @@ class SolrCMFCV(BaseEstimator):
                         stacklevel=2,
                     )
 
+                factor_pattern = est.factor_pattern()
+
                 return (
                     score_fn(X, est.transform(X), indices=test_indices),
                     est.elapsed_process_time_,
@@ -700,10 +704,10 @@ class SolrCMFCV(BaseEstimator):
                                 (max_rank - est.est_max_rank_)
                                 * (p.shape[0] - 1)
                                 + sum(1 - p)
-                                for p in est.factor_pattern().values()
+                                for p in factor_pattern.values()
                             ]
                         )
-                        if factor_penalty is not None
+                        if factor_pattern is not None
                         else 0
                     ),
                 )

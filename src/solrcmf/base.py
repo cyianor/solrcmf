@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from dataclasses import Field, dataclass, field
 from functools import singledispatch
-from typing import Protocol
+from typing import Any, ClassVar, Protocol
 
 from numpy import float64
 from numpy.typing import NDArray
@@ -31,7 +31,7 @@ class DataclassInstance(Protocol):
     Matches the DataclassInstance definition in typeshed.
     """
 
-    __dataclass_fields__: dict[str, Field]
+    __dataclass_fields__: ClassVar[dict[str, Field[Any]]]
 
 
 class ConstraintParams(DataclassInstance, Protocol):
