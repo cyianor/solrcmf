@@ -111,7 +111,7 @@ def bicenter(
     )[None, :]
 
     # Iterate
-    for it in range(max_iter):
+    for _it in range(max_iter):
         total_mean = mean(
             X.flat[indices] - (row_means + col_means).flat[indices]
         )
@@ -152,8 +152,11 @@ def bicenter(
         if r_crit <= tol:
             break
 
-    if it + 1 == max_iter:
-        warn(f"Bi-centering did not converge in {max_iter} iterations")
+    if _it + 1 == max_iter:
+        warn(
+            f"Bi-centering did not converge in {max_iter} iterations",
+            stacklevel=2,
+        )
 
     Y = X.copy()
     Y[mask] -= (total_mean + row_means + col_means)[mask]
