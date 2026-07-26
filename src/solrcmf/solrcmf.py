@@ -10,6 +10,7 @@ from typing import Any, override
 from warnings import warn
 
 from numpy import (
+    asarray,
     bool_,
     flatnonzero,
     float64,
@@ -301,6 +302,22 @@ class SolrCMF(ADMM[SolrCMFBlocks, SolrCMFConstraints, SolrCMFParams]):
             else:
                 ctx.params.mu = self.mu
 
+            factor_pattern = {
+                k: asarray(pattern) for k, pattern in factor_pattern.items()
+            }
+            if any(pattern.ndim != 2 for pattern in factor_pattern.values()):
+                raise ValueError(
+                    "Each value in 'factor_pattern' needs to be a"
+                    " two-dimensional array"
+                )
+            if any(
+                pattern.dtype != bool_ for pattern in factor_pattern.values()
+            ):
+                raise ValueError(
+                    "Each value in 'factor_pattern' needs to have boolean"
+                    " dtype"
+                )
+
             # Check factor pattern's correctness
             if factor_pattern.keys() != viewdims.keys():
                 raise ValueError(
@@ -328,6 +345,16 @@ class SolrCMF(ADMM[SolrCMFBlocks, SolrCMFConstraints, SolrCMFParams]):
                     " 'max_rank' or number of elements in each"
                     f" 'structure_pattern'. Expected: {max_rank}, observed:"
                     f" {rk}"
+                )
+            empty_columns = {
+                k: flatnonzero(~pattern.any(axis=0)).tolist()
+                for k, pattern in factor_pattern.items()
+                if not pattern.any(axis=0).all()
+            }
+            if empty_columns:
+                raise ValueError(
+                    "Each column in 'factor_pattern' must contain at least"
+                    f" one allowed entry. Empty columns: {empty_columns}"
                 )
 
             ctx.params.factor_pattern = factor_pattern

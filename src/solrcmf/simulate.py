@@ -4,9 +4,23 @@ This module provides functions to simulate synthetic data.
 """
 
 from collections.abc import Mapping
+from numbers import Integral, Real
 from typing import TypedDict
 
-from numpy import argsort, atleast_1d, diag, float64, floor, sqrt, sum
+from numpy import (
+    abs,
+    asarray,
+    atleast_1d,
+    ceil,
+    diag,
+    eye,
+    float64,
+    isfinite,
+    ix_,
+    sqrt,
+    sum,
+    zeros,
+)
 from numpy.linalg import qr
 from numpy.random import Generator, default_rng
 from numpy.typing import ArrayLike, NDArray
@@ -22,19 +36,10 @@ def _sparse_v(
 ) -> NDArray[float64]:
     """Generate orthogonal sparse factors.
 
-    Generate max_rank orthgonal columns of sparse factors of
-    dimension `p`. Initially, each column is generated element-wise
-    from a standard normal distribution. The `(1 - sparsity)`
-    proportion of smallest values is then set to zero and a masked
-    Gram-Schmidt algorithm is used to generate orthogonal factors
-    which retain the initial zero pattern.
-
-    Caveat: Note that if `sparsity * p < max_rank`, then there is a
-    non-zero chance that the same set of non-zero entries is chosen
-    across the `max_rank` columns. It is then impossible to generate
-    max_rank orthogonal factors.
-    Since SolrCMF operates in the `p >> max_rank` regime, this case is
-    not explicitely checked for.
+    Columns are split among disjoint row-support blocks. Within each
+    support block, a thin QR decomposition produces orthonormal
+    columns. This construction preserves the exact generated support
+    and makes columns from different blocks orthogonal by construction.
 
     Args:
         p: The dimension of the factors.
@@ -46,27 +51,59 @@ def _sparse_v(
         The generated factors as a numpy.ndarray of shape
         (p, max_rank).
 
+    Raises:
+        ValueError: If the requested number of nonzero entries cannot be
+            represented by disjoint support blocks.
+        RuntimeError: If numerical postconditions fail unexpectedly.
+
     """
-    # Random matrix
-    v = rng.standard_normal((p, max_rank))
-    # Set smallest values in each column to zero
-    order = argsort(abs(v), axis=0)
-    zero_indices = order[: int(floor((1.0 - sparsity) * p)), :]
-    for i in range(max_rank):
-        v[zero_indices[:, i], i] = 0.0
+    n_nonzero = int(ceil(sparsity * p))
+    min_support_blocks = (max_rank + n_nonzero - 1) // n_nonzero
+    max_support_blocks = p // n_nonzero
+    if min_support_blocks > max_support_blocks:
+        raise ValueError(
+            "Cannot construct sparse orthogonal factors with"
+            f" dimension={p}, rank={max_rank}, and sparsity={sparsity}."
+            " Increase 'factor_sparsity' or the view dimension, or decrease"
+            " the rank."
+        )
 
-    # Orthonormalise the columns while keeping their respective zero pattern
-    for i in range(max_rank):
-        for j in range(i):
-            mask = v[:, i] != 0.0
-            if all(v[mask, j] == 0.0):
-                continue
+    n_support_blocks = min(max_rank, max_support_blocks)
+    row_order = rng.permutation(p)
+    column_order = rng.permutation(max_rank)
+    base_group_size, remainder = divmod(max_rank, n_support_blocks)
 
-            v[mask, i] -= (
-                sum(v[:, i] * v[:, j]) / sum(v[mask, j] ** 2) * v[mask, j]
+    v = zeros((p, max_rank), dtype=float64)
+    column_offset = 0
+    for block_idx in range(n_support_blocks):
+        group_size = base_group_size + (block_idx < remainder)
+        support = row_order[
+            block_idx * n_nonzero : (block_idx + 1) * n_nonzero
+        ]
+        columns = column_order[column_offset : column_offset + group_size]
+        column_offset += group_size
+
+        for _ in range(10):
+            q = qr(rng.standard_normal((n_nonzero, group_size))).Q
+            if (q != 0.0).all() and isfinite(q).all():
+                break
+        else:
+            raise RuntimeError(
+                "Failed to generate finite sparse factors with the intended"
+                " support."
             )
+        v[ix_(support, columns)] = q
 
-        v[:, i] /= sqrt(sum(v[:, i] ** 2))
+    orthogonality_error = abs(v.T @ v - eye(max_rank)).max()
+    if (
+        not isfinite(v).all()
+        or orthogonality_error > 1e-12
+        or not ((v != 0.0).sum(axis=0) == n_nonzero).all()
+    ):
+        raise RuntimeError(
+            "Sparse factor generation failed its orthogonality or support"
+            " postcondition."
+        )
 
     return v
 
@@ -117,24 +154,44 @@ def simulate(
     if rng is None:
         rng = default_rng()
 
-    factor_scales_ = {k: atleast_1d(v) for k, v in factor_scales.items()}
+    if not factor_scales:
+        raise ValueError("'factor_scales' must contain at least one matrix")
+    if not all(isinstance(k, tuple) and len(k) >= 2 for k in factor_scales):
+        raise ValueError(
+            "Each key in 'factor_scales' needs to be a tuple of two"
+            " or more entries"
+        )
+
+    factor_scales_ = {
+        k: asarray(atleast_1d(v), dtype=float64)
+        for k, v in factor_scales.items()
+    }
     shapes = [s.shape for s in factor_scales_.values()]
-    if not all([len(s) == 1 and s == shapes[0] for s in shapes]):
+    if not all(len(s) == 1 and s == shapes[0] for s in shapes):
         raise ValueError(
             "Each value in 'factor_scales' needs to be of shape (max_rank,)"
         )
     max_rank = shapes[0][0]
-    if not all(len(k) >= 2 for k in factor_scales_.keys()):
-        raise ValueError(
-            "Each key in 'factor_scales' needs to be a tuple of two"
-            " or more integers"
-        )
+    if max_rank == 0:
+        raise ValueError("'factor_scales' values must not be empty")
+    if not all(isfinite(s).all() for s in factor_scales_.values()):
+        raise ValueError("Each value in 'factor_scales' needs to be finite")
 
-    views = set([k[i] for k in factor_scales_.keys() for i in range(2)])
+    views = {k[i] for k in factor_scales_ for i in range(2)}
     if views != viewdims.keys():
         raise ValueError(
             "The keys of 'viewdims' need to appear in the first two entries"
             " of the keys of 'factor_scales'"
+        )
+    invalid_viewdims = {
+        k: p
+        for k, p in viewdims.items()
+        if not isinstance(p, Integral) or p < max_rank
+    }
+    if invalid_viewdims:
+        raise ValueError(
+            "Each view dimension must be an integer greater than or equal to"
+            f" max_rank={max_rank}. Invalid dimensions: {invalid_viewdims}"
         )
 
     if scales is None:
@@ -144,8 +201,10 @@ def simulate(
         raise ValueError(
             "'scales' needs to be compatible with 'factor_scales'"
         )
-    if not all(s > 0.0 for s in scales.values()):
-        raise ValueError("Each value in 'scales' needs to be positive")
+    if not all(isfinite(s) and s > 0.0 for s in scales.values()):
+        raise ValueError(
+            "Each value in 'scales' needs to be positive and finite"
+        )
 
     if isinstance(snr, (int, float)):
         if snr <= 0.0:
@@ -173,6 +232,16 @@ def simulate(
             raise ValueError(
                 "'factor_sparsity' needs to be provided for each view"
             )
+        invalid_sparsities = {
+            k: s
+            for k, s in factor_sparsity.items()
+            if not isinstance(s, Real) or not isfinite(s) or not 0.0 < s <= 1.0
+        }
+        if invalid_sparsities:
+            raise ValueError(
+                "Each value in 'factor_sparsity' must be finite and in"
+                f" (0, 1]. Invalid values: {invalid_sparsities}"
+            )
 
         vs = {
             k: _sparse_v(p, max_rank, factor_sparsity[k], rng)
@@ -190,6 +259,12 @@ def simulate(
         * rng.standard_normal(size=x.shape)
         for k, x in xs_truth.items()
     }
+
+    if not all(isfinite(x).all() for x in (*xs_truth.values(), *xs.values())):
+        raise ValueError(
+            "Simulation produced non-finite values; check scales and signal"
+            " magnitudes"
+        )
 
     return {
         "xs_truth": xs_truth,
