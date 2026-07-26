@@ -116,6 +116,13 @@ class ADMM[
         # Setup ADMM context
         ctx = self._setup(X, **kwargs)
 
+        # A successful setup starts a new fit. Remove results from the
+        # previous fit so optional attributes cannot survive when the new
+        # configuration does not produce them.
+        for attr in tuple(vars(self)):
+            if attr.endswith("_") and not attr.startswith("__"):
+                delattr(self, attr)
+
         start_time = process_time()
 
         objs = []

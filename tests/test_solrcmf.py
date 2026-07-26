@@ -112,3 +112,38 @@ def test_random_init_accepts_integer_seed():
 
     for k in first.ds_:
         assert_allclose(first.ds_[k], second.ds_[k])
+
+
+def test_refit_without_factor_sparsity_removes_us():
+    """A non-sparse refit does not retain sparse factors from the prior fit."""
+    X = _simdata()["xs"]
+    est = SolrCMF(
+        structure_penalty=0.1,
+        max_rank=2,
+        factor_penalty=0.01,
+        max_iter=1,
+    ).fit(X)
+    assert hasattr(est, "us_")
+
+    est.set_params(factor_penalty=None)
+    est.fit(X)
+
+    assert not hasattr(est, "us_")
+    assert est.factor_pattern() is None
+
+
+def test_refit_without_context_saving_removes_ctx():
+    """A refit with save_ctx=False does not retain the prior context."""
+    X = _simdata()["xs"]
+    est = SolrCMF(
+        structure_penalty=0.1,
+        max_rank=2,
+        max_iter=1,
+        save_ctx=True,
+    ).fit(X)
+    assert hasattr(est, "ctx_")
+
+    est.set_params(save_ctx=False)
+    est.fit(X)
+
+    assert not hasattr(est, "ctx_")
