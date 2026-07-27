@@ -10,8 +10,6 @@ from warnings import warn
 
 from numpy import (
     asarray,
-    diagonal,
-    fill_diagonal,
     flatnonzero,
     float32,
     float64,
@@ -46,7 +44,7 @@ class LowRankImputation(BaseEstimator):
     """
 
     _parameter_constraints = {
-        "penalty": [Interval(Real, 0, None, closed="left")],
+        "penalty": [Interval(Real, 0, None, closed="neither")],
         "max_rank": [Interval(Integral, 1, None, closed="left")],
         "init": [StrOptions({"random", "custom"})],
         "warm_start": ["boolean"],
@@ -69,7 +67,8 @@ class LowRankImputation(BaseEstimator):
         """Initialize LowRankImputation.
 
         Args:
-            penalty: Ridge regularisation weight applied to both U and V.
+            penalty: Strictly positive ridge regularisation weight applied to
+                both U and V.
             max_rank: Number of latent factors.
             init: Initialisation strategy. "random" draws U and V from a
                 standard normal distribution; "custom" uses the U and V
@@ -142,6 +141,14 @@ class LowRankImputation(BaseEstimator):
         max_iter = self.max_iter
         tol = self.tol
 
+        observed = ~isnan(X)
+        complete = observed.all()
+        if not complete:
+            observed_by_row = tuple(flatnonzero(row) for row in observed)
+            observed_by_column = tuple(
+                flatnonzero(column) for column in observed.T
+            )
+
         loss_old = _compute_loss(X, U, V, penalty)
 
         converged = False
@@ -151,27 +158,39 @@ class LowRankImputation(BaseEstimator):
             #            + lambda / 2 * ||u||_F^2
             #            + lambda / 2 * ||v||_F^2
 
-            # Given fixed v this is a ridge regression problem for each
-            # u^(i, :) for a subset of the rows of v
-            for r in range(X.shape[0]):
-                indices = flatnonzero(1 - isnan(X[r, :]))
-                A = V[indices, :].T @ V[indices, :]
-                fill_diagonal(A, diagonal(A) + penalty)
-                b = V[indices, :].T @ X[r, :][indices]
-                U[r, :] = solve(A, b)
+            if complete:
+                # Every row (and then every column) shares a normal matrix,
+                # so solve all right-hand sides together.
+                A = _ridge_normal_matrix(V, penalty)
+                U[...] = solve(A, (X @ V).T).T
 
-            # Given fixed u this is a ridge regression problem for each
-            # v^(j, :) for a subset of the rows of u
-            for c in range(X.shape[1]):
-                indices = flatnonzero(1 - isnan(X[:, c]))
-                A = U[indices, :].T @ U[indices, :]
-                fill_diagonal(A, diagonal(A) + penalty)
-                b = U[indices, :].T @ X[:, c][indices]
-                V[c, :] = solve(A, b)
+                A = _ridge_normal_matrix(U, penalty)
+                V[...] = solve(A, (X.T @ U).T).T
+            else:
+                # Given fixed v this is a ridge regression problem for each
+                # u^(i, :) for the observed rows of v.
+                for r, indices in enumerate(observed_by_row):
+                    V_observed = V[indices, :]
+                    A = _ridge_normal_matrix(V_observed, penalty)
+                    b = V_observed.T @ X[r, indices]
+                    U[r, :] = solve(A, b)
+
+                # Given fixed u this is a ridge regression problem for each
+                # v^(j, :) for the observed rows of u.
+                for c, indices in enumerate(observed_by_column):
+                    U_observed = U[indices, :]
+                    A = _ridge_normal_matrix(U_observed, penalty)
+                    b = U_observed.T @ X[indices, c]
+                    V[c, :] = solve(A, b)
 
             loss = _compute_loss(X, U, V, penalty)
 
-            if (loss_old - loss) < tol * loss_old:
+            loss_decrease = loss_old - loss
+            if loss_decrease < 0:
+                loss_old = loss
+                continue
+
+            if loss_decrease <= tol * loss_old:
                 converged = True
                 break
 
@@ -185,6 +204,13 @@ class LowRankImputation(BaseEstimator):
         self.loss_ = loss
 
         return self
+
+
+def _ridge_normal_matrix(factors, penalty):
+    """Return the ridge-regularised normal matrix for factors."""
+    A = factors.T @ factors
+    A.flat[:: A.shape[0] + 1] += penalty
+    return A
 
 
 def _random_init(X, max_rank, random_state):
