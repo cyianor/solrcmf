@@ -16,7 +16,7 @@ from numpy import (
     isnan,
     nansum,
 )
-from numpy.linalg import solve
+from numpy.linalg import lstsq, solve
 from numpy.random import RandomState
 from numpy.typing import ArrayLike
 from sklearn.base import BaseEstimator
@@ -44,7 +44,7 @@ class LowRankImputation(BaseEstimator):
     """
 
     _parameter_constraints = {
-        "penalty": [Interval(Real, 0, None, closed="neither")],
+        "penalty": [Interval(Real, 0, None, closed="left")],
         "max_rank": [Interval(Integral, 1, None, closed="left")],
         "init": [StrOptions({"random", "custom"})],
         "warm_start": ["boolean"],
@@ -67,8 +67,8 @@ class LowRankImputation(BaseEstimator):
         """Initialize LowRankImputation.
 
         Args:
-            penalty: Strictly positive ridge regularisation weight applied to
-                both U and V.
+            penalty: Non-negative ridge regularisation weight applied to both
+                U and V. Zero uses an unregularised least-squares solve.
             max_rank: Number of latent factors.
             init: Initialisation strategy. "random" draws U and V from a
                 standard normal distribution; "custom" uses the U and V
@@ -159,29 +159,30 @@ class LowRankImputation(BaseEstimator):
             #            + lambda / 2 * ||v||_F^2
 
             if complete:
-                # Every row (and then every column) shares a normal matrix,
+                # Every row (and then every column) shares a design matrix,
                 # so solve all right-hand sides together.
-                A = _ridge_normal_matrix(V, penalty)
-                U[...] = solve(A, (X @ V).T).T
-
-                A = _ridge_normal_matrix(U, penalty)
-                V[...] = solve(A, (X.T @ U).T).T
+                U[...] = _solve_factor_update(V, X.T, penalty).T
+                V[...] = _solve_factor_update(U, X, penalty).T
             else:
                 # Given fixed v this is a ridge regression problem for each
                 # u^(i, :) for the observed rows of v.
                 for r, indices in enumerate(observed_by_row):
                     V_observed = V[indices, :]
-                    A = _ridge_normal_matrix(V_observed, penalty)
-                    b = V_observed.T @ X[r, indices]
-                    U[r, :] = solve(A, b)
+                    U[r, :] = _solve_factor_update(
+                        V_observed,
+                        X[r, indices],
+                        penalty,
+                    )
 
                 # Given fixed u this is a ridge regression problem for each
                 # v^(j, :) for the observed rows of u.
                 for c, indices in enumerate(observed_by_column):
                     U_observed = U[indices, :]
-                    A = _ridge_normal_matrix(U_observed, penalty)
-                    b = U_observed.T @ X[indices, c]
-                    V[c, :] = solve(A, b)
+                    V[c, :] = _solve_factor_update(
+                        U_observed,
+                        X[indices, c],
+                        penalty,
+                    )
 
             loss = _compute_loss(X, U, V, penalty)
 
@@ -204,6 +205,16 @@ class LowRankImputation(BaseEstimator):
         self.loss_ = loss
 
         return self
+
+
+def _solve_factor_update(factors, targets, penalty):
+    """Solve one factor update, using stable least squares when unpenalised."""
+    if penalty == 0:
+        return lstsq(factors, targets, rcond=None)[0]
+
+    A = _ridge_normal_matrix(factors, penalty)
+    b = factors.T @ targets
+    return solve(A, b)
 
 
 def _ridge_normal_matrix(factors, penalty):
